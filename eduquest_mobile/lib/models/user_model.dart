@@ -1,7 +1,7 @@
 class UserModel {
   final int? id;
-  final String username;
-  final String email;
+  String username;
+  String email;
   final String password;
   final int points;
   final int streakCount;

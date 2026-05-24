@@ -2,9 +2,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../core/db_helper.dart';
+import '../models/user_model.dart';
 
 class AiHelperPage extends StatefulWidget {
-  const AiHelperPage({super.key});
+  final UserModel user;
+  const AiHelperPage({super.key, required this.user});
 
   @override
   State<AiHelperPage> createState() => _AiHelperPageState();
@@ -30,7 +32,7 @@ class _AiHelperPageState extends State<AiHelperPage> {
   final TextEditingController _chatController = TextEditingController();
   List<Map<String, String>> chatHistory = [];
   bool isChatLoading = false;
-  bool _showInfoBanner = true; // ← state untuk banner info
+  bool _showInfoBanner = true;
 
   final TextEditingController _factController = TextEditingController();
   bool isFactLoading = false;
@@ -66,7 +68,6 @@ class _AiHelperPageState extends State<AiHelperPage> {
     _chatController.clear();
 
     try {
-      // ✅ GROQ: Endpoint
       final url = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
 
       String promptContext =
@@ -79,11 +80,9 @@ class _AiHelperPageState extends State<AiHelperPage> {
         url,
         headers: {
           'Content-Type': 'application/json',
-          // ✅ GROQ: Pakai Authorization Bearer, bukan query param
           'Authorization': 'Bearer $apiKey',
         },
         body: jsonEncode({
-          // ✅ GROQ: Format OpenAI-compatible
           "model": modelName,
           "messages": [
             {
@@ -100,7 +99,6 @@ class _AiHelperPageState extends State<AiHelperPage> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        // ✅ GROQ: Cara ambil reply berbeda dari Gemini
         String reply = data['choices'][0]['message']['content'];
 
         await _dbHelper.saveMessage("ai", reply);
@@ -134,7 +132,6 @@ class _AiHelperPageState extends State<AiHelperPage> {
     });
 
     try {
-      // ✅ GROQ: Endpoint sama dengan chat
       final url = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
 
       String promptContext =
@@ -153,23 +150,20 @@ class _AiHelperPageState extends State<AiHelperPage> {
           "messages": [
             {
               "role": "system",
-              // ✅ System prompt tambahan agar Groq lebih patuh format JSON
               "content":
                   "Kamu adalah fact checker. Selalu balas HANYA dengan JSON murni, tanpa markdown, tanpa penjelasan tambahan."
             },
             {"role": "user", "content": promptContext}
           ],
-          "temperature": 0.3, // Lebih rendah supaya output JSON lebih konsisten
+          "temperature": 0.3,
           "max_tokens": 256,
         }),
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        // ✅ GROQ: Cara ambil reply
         String reply = data['choices'][0]['message']['content'];
 
-        // Bersihkan jika ada backtick markdown yang mungkin masih muncul
         reply = reply
             .replaceAll('```json', '')
             .replaceAll('```', '')
@@ -177,10 +171,26 @@ class _AiHelperPageState extends State<AiHelperPage> {
 
         final jsonReply = jsonDecode(reply);
 
+        // ✅ FIX: 1. UPDATE UI dulu (sinkron, tidak boleh ada await di sini)
         setState(() {
           factScore = jsonReply['score'];
           factExplanation = jsonReply['explanation'];
         });
+
+        // ✅ FIX: 2. Baru jalankan await DI LUAR setState
+        if (factScore! > 60) {
+          await _dbHelper.addPoints(widget.user.username, 5);
+
+          // Pastikan halaman belum ditutup user sebelum tampilkan SnackBar
+          if (!mounted) return;
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Hebat! Fakta akurat. +5 Poin Pet! 🎉"),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
       } else {
         throw Exception("Status: ${response.statusCode}, Body: ${response.body}");
       }
