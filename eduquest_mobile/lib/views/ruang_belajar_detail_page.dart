@@ -130,7 +130,7 @@ class _RuangBelajarDetailPageState extends State<RuangBelajarDetailPage> {
                   Row(
                     children: [
                       Container(
-                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+                        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle),
                         child: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.pop(context)),
                       ),
                       const SizedBox(width: 16),
@@ -150,7 +150,7 @@ class _RuangBelajarDetailPageState extends State<RuangBelajarDetailPage> {
                   // TOMBOL BUBARKAN (Hanya muncul jika user adalah creator)
                   if (widget.roomData['isCreator'] == true)
                     Container(
-                      decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.8), borderRadius: BorderRadius.circular(12)),
+                      decoration: BoxDecoration(color: Colors.redAccent.withValues(alpha: 0.8), borderRadius: BorderRadius.circular(12)),
                       child: IconButton(
                         icon: const Icon(Icons.power_settings_new, color: Colors.white),
                         tooltip: "Bubarkan Ruangan",
@@ -168,7 +168,7 @@ class _RuangBelajarDetailPageState extends State<RuangBelajarDetailPage> {
                   // --- KARTU POMODORO TIMER ---
                   Container(
                     padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)]),
                     child: Column(
                       children: [
                         const Text("Pomodoro Timer", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
@@ -202,16 +202,16 @@ class _RuangBelajarDetailPageState extends State<RuangBelajarDetailPage> {
                   // --- KARTU KENDALI SUARA & DAFTAR PESERTA ---
                   Container(
                     padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)]),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            Expanded(
+                            const Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
-                                children: const [
+                                children: [
                                   Text("Voice Chat (Open Mic)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                                   SizedBox(height: 4),
                                   Text("Nyalakan mic untuk berdiskusi langsung.", style: TextStyle(color: Colors.grey, fontSize: 12)),
@@ -222,7 +222,7 @@ class _RuangBelajarDetailPageState extends State<RuangBelajarDetailPage> {
                               onTap: () => setState(() => isMicOn = !isMicOn),
                               child: CircleAvatar(
                                 radius: 28,
-                                backgroundColor: isMicOn ? Colors.red : const Color(0xFF7B61FF).withOpacity(0.1),
+                                backgroundColor: isMicOn ? Colors.red : const Color(0xFF7B61FF).withValues(alpha: 0.1),
                                 child: Icon(isMicOn ? Icons.mic_off : Icons.mic, color: isMicOn ? Colors.white : const Color(0xFF7B61FF), size: 28),
                               ),
                             )
@@ -266,7 +266,7 @@ class _RuangBelajarDetailPageState extends State<RuangBelajarDetailPage> {
                   // --- KARTU GROUP CHAT (FOTO/VIDEO) ---
                   Container(
                     height: 350, 
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)]),
                     child: Column(
                       children: [
                         const Padding(padding: EdgeInsets.all(16.0), child: Text("Media & Diskusi", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
@@ -284,7 +284,7 @@ class _RuangBelajarDetailPageState extends State<RuangBelajarDetailPage> {
                                       child: Container(
                                         margin: const EdgeInsets.only(bottom: 12),
                                         padding: const EdgeInsets.all(12),
-                                        decoration: BoxDecoration(color: const Color(0xFF7B61FF).withOpacity(0.1), borderRadius: BorderRadius.circular(16).copyWith(bottomRight: const Radius.circular(0))),
+                                        decoration: BoxDecoration(color: const Color(0xFF7B61FF).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16).copyWith(bottomRight: const Radius.circular(0))),
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.end,
                                           children: [

@@ -54,7 +54,7 @@ class _DetailPertanyaanPageState extends State<DetailPertanyaanPage> {
                       ],
                     ),
                     const Spacer(),
-                    Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: _primaryPurple.withOpacity(0.1), borderRadius: BorderRadius.circular(10)), child: Text(widget.question['category'], style: TextStyle(color: _primaryPurple, fontSize: 11, fontWeight: FontWeight.bold)))
+                    Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: _primaryPurple.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: Text(widget.question['category'], style: TextStyle(color: _primaryPurple, fontSize: 11, fontWeight: FontWeight.bold)))
                   ],
                 ),
                 const SizedBox(height: 20),

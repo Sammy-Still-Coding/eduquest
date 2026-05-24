@@ -1,4 +1,8 @@
 allprojects {
+    // 1. TAMBAHKAN DUA BARIS INI UNTUK MEMAKSA PLUGIN MENURUTI SDK 36
+    extra.set("compileSdkVersion", 36)
+    extra.set("targetSdkVersion", 36)
+
     repositories {
         google()
         mavenCentral()

@@ -248,7 +248,7 @@ class _AiHelperPageState extends State<AiHelperPage> {
               const SizedBox(height: 24),
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(30),
                 ),
                 child: Row(
@@ -336,10 +336,10 @@ class _AiHelperPageState extends State<AiHelperPage> {
                 children: [
                   const Icon(Icons.auto_awesome, color: Colors.amber),
                   const SizedBox(width: 12),
-                  Expanded(
+                  const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Text(
                           "Bagaimana Cara Kerja Personal Helper?",
                           style: TextStyle(
@@ -393,7 +393,7 @@ class _AiHelperPageState extends State<AiHelperPage> {
                           ),
                           boxShadow: [
                             BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
+                                color: Colors.black.withValues(alpha: 0.05),
                                 blurRadius: 5)
                           ],
                         ),
@@ -466,7 +466,7 @@ class _AiHelperPageState extends State<AiHelperPage> {
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
                 borderSide:
-                    BorderSide(color: _primaryPurple.withOpacity(0.5)),
+                    BorderSide(color: _primaryPurple.withValues(alpha: 0.5)),
               ),
             ),
           ),

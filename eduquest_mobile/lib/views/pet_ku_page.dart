@@ -196,7 +196,7 @@ class _PetKuPageState extends State<PetKuPage> {
             children: [
               Row(
                 children: [
-                  Container(decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle), child: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () {})),
+                  Container(decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle), child: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () {})),
                   const SizedBox(width: 16),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -229,7 +229,7 @@ class _PetKuPageState extends State<PetKuPage> {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(colors: [Colors.orange.shade50, Colors.yellow.shade50], begin: Alignment.topCenter, end: Alignment.bottomCenter),
                     borderRadius: BorderRadius.circular(24),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
                   ),
                   child: Column(
                     children: [
@@ -249,9 +249,9 @@ class _PetKuPageState extends State<PetKuPage> {
                       const SizedBox(height: 8),
                       Text(petName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF833471))),
                       const SizedBox(height: 4),
-                      Row(
+                      const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
+                        children: [
                           Icon(Icons.sentiment_very_satisfied, color: Colors.green, size: 18),
                           SizedBox(width: 6),
                           Text("Sangat Senang", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 14)),
@@ -263,7 +263,7 @@ class _PetKuPageState extends State<PetKuPage> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(children: const [Icon(Icons.trending_up, size: 16, color: Color(0xFFB53471)), SizedBox(width: 4), Text("Level Up", style: TextStyle(fontWeight: FontWeight.bold))]),
+                          const Row(children: [Icon(Icons.trending_up, size: 16, color: Color(0xFFB53471)), SizedBox(width: 4), Text("Level Up", style: TextStyle(fontWeight: FontWeight.bold))]),
                           Text(nextLevelTarget, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
                         ],
                       ),
@@ -276,7 +276,7 @@ class _PetKuPageState extends State<PetKuPage> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(children: const [Icon(Icons.timer, size: 16, color: Colors.orange), SizedBox(width: 4), Text("Daily Screen Time", style: TextStyle(fontWeight: FontWeight.bold))]),
+                          const Row(children: [Icon(Icons.timer, size: 16, color: Colors.orange), SizedBox(width: 4), Text("Daily Screen Time", style: TextStyle(fontWeight: FontWeight.bold))]),
                           Text("$sessionMinutes/30 mnt", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
                         ],
                       ),
@@ -295,7 +295,7 @@ class _PetKuPageState extends State<PetKuPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(children: const [Icon(Icons.auto_awesome, color: Colors.blue), SizedBox(width: 8), Text("Cara Merawat Pet", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueAccent))]),
+                      const Row(children: [Icon(Icons.auto_awesome, color: Colors.blue), SizedBox(width: 8), Text("Cara Merawat Pet", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueAccent))]),
                       const SizedBox(height: 12),
                       _buildRuleBullet("Bantu jawab pertanyaan di Beranda (+10 poin)"),
                       _buildRuleBullet("Buat Ruang Belajar baru (+5 poin)"),

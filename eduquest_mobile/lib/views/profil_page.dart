@@ -114,7 +114,7 @@ class _ProfilPageState extends State<ProfilPage> {
                   ]),
                   Text(widget.user.email, style: const TextStyle(color: Colors.white70)),
                   const SizedBox(height: 10),
-                  Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)), child: Text("Level ${widget.user.petLevel} ${getLevelTitle(widget.user.petLevel)}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                  Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6), decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)), child: Text("Level ${widget.user.petLevel} ${getLevelTitle(widget.user.petLevel)}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
                 ],
               ),
             ),
@@ -181,7 +181,7 @@ class _ProfilPageState extends State<ProfilPage> {
     );
   }
 
-  Widget _buildStatBox(String title, String val, Color color) => Expanded(child: Container(margin: const EdgeInsets.symmetric(horizontal: 4), padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: color.withOpacity(0.3))), child: Column(children: [Text(val, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey))])));
+  Widget _buildStatBox(String title, String val, Color color) => Expanded(child: Container(margin: const EdgeInsets.symmetric(horizontal: 4), padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: color.withValues(alpha: 0.3))), child: Column(children: [Text(val, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey))])));
   Widget _buildBadge(String title, IconData icon, bool unlocked) => Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: unlocked ? Colors.amber.shade50 : Colors.grey.shade100, border: Border.all(color: unlocked ? Colors.amber : Colors.grey.shade300), borderRadius: BorderRadius.circular(10)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, color: unlocked ? Colors.amber : Colors.grey), const SizedBox(width: 5), Text(title, style: TextStyle(color: unlocked ? Colors.black : Colors.grey))]));
   Widget _buildListTile(String title, String val, IconData icon) => ListTile(leading: Icon(icon, color: const Color(0xFF7B61FF)), title: Text(title), trailing: Text(val, style: const TextStyle(fontWeight: FontWeight.bold)));
 }

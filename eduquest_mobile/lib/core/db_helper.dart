@@ -197,8 +197,9 @@ class DbHelper {
       int newPoints = currentPoints + pointsToAdd;
 
       int newLevel = 1;
-      if (newPoints >= 200) newLevel = 5;
-      else if (newPoints >= 150) newLevel = 4;
+      if (newPoints >= 200) {
+        newLevel = 5;
+      } else if (newPoints >= 150) newLevel = 4;
       else if (newPoints >= 100) newLevel = 3;
       else if (newPoints >= 50) newLevel = 2;
 
