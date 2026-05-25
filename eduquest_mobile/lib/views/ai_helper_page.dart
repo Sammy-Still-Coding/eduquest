@@ -17,14 +17,8 @@ class _AiHelperPageState extends State<AiHelperPage> {
 
   // ============================================================
   // GANTI DENGAN API KEY GROQ KAMU
-  // Daftar gratis di: https://console.groq.com
   // ============================================================
   final String apiKey = "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";
-
-  // Model Groq gratis yang tersedia (2026):
-  // - "llama-3.1-8b-instant"      → ringan & sangat cepat
-  // - "llama-3.3-70b-versatile"   → lebih pintar, REKOMENDASI
-  // - "qwen/qwen3-32b"            → alternatif bagus
   final String modelName = "llama-3.3-70b-versatile";
 
   bool isPersonalHelper = true;
@@ -49,6 +43,7 @@ class _AiHelperPageState extends State<AiHelperPage> {
 
   void _loadChatHistory() async {
     var history = await _dbHelper.getChatHistory();
+    if (!mounted) return; // ✅ Mencegah error jika widget sudah ditutup
     setState(() {
       chatHistory = history;
     });
@@ -103,6 +98,7 @@ class _AiHelperPageState extends State<AiHelperPage> {
 
         await _dbHelper.saveMessage("ai", reply);
 
+        if (!mounted) return; // ✅ Mencegah memory leak
         setState(() {
           chatHistory.add({"role": "ai", "message": reply});
         });
@@ -110,13 +106,16 @@ class _AiHelperPageState extends State<AiHelperPage> {
         throw Exception("Status: ${response.statusCode}, Body: ${response.body}");
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         chatHistory.add({"role": "ai", "message": "Error: $e"});
       });
     } finally {
-      setState(() {
-        isChatLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          isChatLoading = false;
+        });
+      }
     }
   }
 
@@ -164,30 +163,40 @@ class _AiHelperPageState extends State<AiHelperPage> {
         final data = jsonDecode(response.body);
         String reply = data['choices'][0]['message']['content'];
 
+        // Bersihkan balasan dari karakter markdown (```json atau ```)
         reply = reply
             .replaceAll('```json', '')
             .replaceAll('```', '')
             .trim();
 
-        final jsonReply = jsonDecode(reply);
+        try {
+          // ✅ Try-Catch khusus untuk parsing JSON agar tidak langsung crash jika AI ngaco
+          final jsonReply = jsonDecode(reply);
 
-        // ✅ FIX: 1. UPDATE UI dulu (sinkron, tidak boleh ada await di sini)
-        setState(() {
-          factScore = jsonReply['score'];
-          factExplanation = jsonReply['explanation'];
-        });
-
-        // ✅ FIX: 2. Baru jalankan await DI LUAR setState
-        if (factScore! > 60) {
-          await _dbHelper.addPoints(widget.user.username, 5);
-
-          // Pastikan halaman belum ditutup user sebelum tampilkan SnackBar
           if (!mounted) return;
+          setState(() {
+            factScore = jsonReply['score'];
+            factExplanation = jsonReply['explanation'];
+          });
 
+          // Jika skor bagus, tambah poin
+          if (factScore != null && factScore! > 60) {
+            await _dbHelper.addPoints(widget.user.username, 5);
+
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("Hebat! Fakta akurat. +5 Poin Pet! 🎉"),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } catch (formatError) {
+          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Hebat! Fakta akurat. +5 Poin Pet! 🎉"),
-              backgroundColor: Colors.green,
+            SnackBar(
+              content: Text("Gagal membaca hasil AI. Balasan asli: $reply"),
+              backgroundColor: Colors.orange,
             ),
           );
         }
@@ -197,122 +206,128 @@ class _AiHelperPageState extends State<AiHelperPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Gagal mengecek fakta. Coba lagi.")),
+          const SnackBar(content: Text("Gagal mengecek fakta. Periksa internet atau coba lagi.")),
         );
       }
     } finally {
-      setState(() {
-        isFactLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          isFactLoading = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
-          decoration: BoxDecoration(
-            color: _primaryPurple,
-            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(30)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    "AI Helper",
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold),
-                  ),
-                  if (isPersonalHelper && chatHistory.isNotEmpty)
-                    IconButton(
-                      icon: const Icon(Icons.delete_sweep, color: Colors.white70),
-                      onPressed: () async {
-                        await _dbHelper.clearChatHistory();
-                        _loadChatHistory();
-                      },
-                    )
-                ],
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                "Bantuan pintar untuk belajarmu",
-                style: TextStyle(color: Colors.white70, fontSize: 14),
-              ),
-              const SizedBox(height: 24),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                child: Row(
+    // ✅ FIX UTAMA: Menggunakan Scaffold sebagai kerangka layar utama
+    return Scaffold(
+      backgroundColor: Colors.grey.shade50,
+      body: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
+            decoration: BoxDecoration(
+              color: _primaryPurple,
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(30)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => isPersonalHelper = true),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          decoration: BoxDecoration(
-                            color: isPersonalHelper
-                                ? Colors.white
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          child: Center(
-                            child: Text(
-                              "💡 Personal Helper",
-                              style: TextStyle(
-                                color: isPersonalHelper
-                                    ? _primaryPurple
-                                    : Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                    const Text(
+                      "AI Helper",
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold),
                     ),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => isPersonalHelper = false),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          decoration: BoxDecoration(
-                            color: !isPersonalHelper
-                                ? Colors.white
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          child: Center(
-                            child: Text(
-                              "☑️ Fact Checker",
-                              style: TextStyle(
-                                color: !isPersonalHelper
-                                    ? _primaryPurple
-                                    : Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+                    if (isPersonalHelper && chatHistory.isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.delete_sweep, color: Colors.white70),
+                        onPressed: () async {
+                          await _dbHelper.clearChatHistory();
+                          _loadChatHistory();
+                        },
+                      )
                   ],
                 ),
-              )
-            ],
+                const SizedBox(height: 4),
+                const Text(
+                  "Bantuan pintar untuk belajarmu",
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() => isPersonalHelper = true),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isPersonalHelper
+                                  ? Colors.white
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                            child: Center(
+                              child: Text(
+                                "💡 Personal Helper",
+                                style: TextStyle(
+                                  color: isPersonalHelper
+                                      ? _primaryPurple
+                                      : Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() => isPersonalHelper = false),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: !isPersonalHelper
+                                  ? Colors.white
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                            child: Center(
+                              child: Text(
+                                "☑️ Fact Checker",
+                                style: TextStyle(
+                                  color: !isPersonalHelper
+                                      ? _primaryPurple
+                                      : Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              ],
+            ),
           ),
-        ),
-        Expanded(
-          child: isPersonalHelper ? _buildPersonalHelper() : _buildFactChecker(),
-        ),
-      ],
+          Expanded(
+            child: isPersonalHelper ? _buildPersonalHelper() : _buildFactChecker(),
+          ),
+        ],
+      ),
     );
   }
 
