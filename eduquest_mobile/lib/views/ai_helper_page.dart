@@ -122,6 +122,7 @@ class _AiHelperPageState extends State<AiHelperPage> {
   }
 
   // --- FUNGSI FACT CHECKER (GROQ API) ---
+  // --- FUNGSI FACT CHECKER (GROQ API) ---
   Future<void> _checkFact() async {
     String text = _factController.text.trim();
     if (text.isEmpty) return;
@@ -135,9 +136,16 @@ class _AiHelperPageState extends State<AiHelperPage> {
     try {
       final url = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
 
-      String promptContext = "Evaluasi fakta ini: '$text'. "
-          "Balas HANYA dengan format JSON persis seperti ini tanpa tambahan apapun: "
-          "{\"score\": angka_0_sampai_100, \"explanation\": \"penjelasan singkat kenapa salah atau benar\"}";
+      // 1. BAGIAN PROMPT YANG DIUBAH (Ditambahkan acuan skala nilai agar bervariasi)
+      String promptContext = "Evaluasi keakuratan fakta ini: '$text'.\n\n"
+          "Berikan penilaian skor dengan ketentuan skala berikut:\n"
+          "- 100: Fakta sepenuhnya benar dan akurat.\n"
+          "- 75-99: Mayoritas benar, namun ada sedikit detail kecil yang kurang pas.\n"
+          "- 40-74: Campuran antara fakta dan opini, atau informasinya ambigu/kurang konteks.\n"
+          "- 1-39: Mayoritas salah atau mengandung disinformasi.\n"
+          "- 0: Fakta sepenuhnya salah atau hoax total.\n\n"
+          "Balas HANYA dengan format JSON persis seperti ini tanpa tambahan markdown atau teks lain:\n"
+          "{\"score\": angka_sesuai_skala, \"explanation\": \"penjelasan analisisnya\"}";
 
       final response = await http.post(
         url,
@@ -151,7 +159,8 @@ class _AiHelperPageState extends State<AiHelperPage> {
             {
               "role": "system",
               "content":
-                  "Kamu adalah fact checker. Selalu balas HANYA dengan JSON murni, tanpa markdown, tanpa penjelasan tambahan."
+                  // Perubahan system prompt agar AI menilai objektif secara detail (tidak biner kaku)
+                  "Kamu adalah fact checker objektif yang menilai kebenaran informasi berdasarkan skala detail."
             },
             {"role": "user", "content": promptContext}
           ],
@@ -168,7 +177,6 @@ class _AiHelperPageState extends State<AiHelperPage> {
         reply = reply.replaceAll('```json', '').replaceAll('```', '').trim();
 
         try {
-          // ✅ Try-Catch khusus untuk parsing JSON agar tidak langsung crash jika AI ngaco
           final jsonReply = jsonDecode(reply);
 
           if (!mounted) return;
@@ -179,8 +187,8 @@ class _AiHelperPageState extends State<AiHelperPage> {
 
           // Jika skor bagus, tambah poin
           if (factScore != null && factScore! > 60) {
-            // ✨ Ganti baris yang merah menjadi seperti ini:
-            await _dbHelper.addPoints(widget.user?.username ?? '', 5);
+            // 2. BAGIAN YANG DIUBAH (Dibersihkan dari widget.user?.username karena widget.user sudah non-nullable)
+            await _dbHelper.addPoints(widget.user.username, 5);
 
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
@@ -212,6 +220,7 @@ class _AiHelperPageState extends State<AiHelperPage> {
         );
       }
     } finally {
+      // 3. BAGIAN YANG DIUBAH (Typo diperbaiki dari 'finaly' menjadi 'finally' agar tidak error)
       if (mounted) {
         setState(() {
           isFactLoading = false;
