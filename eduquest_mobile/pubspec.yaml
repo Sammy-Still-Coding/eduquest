@@ -1,12 +1,11 @@
-name: eduquest
+name: eduquest_mobile
 description: "EduQuest: Platform Belajar Kolaboratif"
 publish_to: "none"
 
 version: 1.0.0+1
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
-
+  sdk: ">=3.12.0 <4.0.0"
 dependencies:
   flutter:
     sdk: flutter
@@ -16,9 +15,9 @@ dependencies:
   http: ^1.2.0
   image_picker: ^1.2.2
   intl: ^0.19.0
-  file_picker: ^8.0.0
-  share_plus: ^9.0.0
+  share_plus: ^12.0.2
   url_launcher: ^6.2.5
+  file_picker: ^8.1.4
 
 dev_dependencies:
   flutter_test:
