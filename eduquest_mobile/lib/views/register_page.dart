@@ -89,9 +89,8 @@ class _RegisterPageState extends State<RegisterPage> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF67B26F),
-              Color(0xFF4CA2CD),
-              Color(0xFF6B48FF),
+              Color(0xFFFFF7AE),
+              Color(0xFF007CBE), // Biru tua di atas
             ],
           ),
         ),
@@ -101,33 +100,13 @@ class _RegisterPageState extends State<RegisterPage> {
                 const EdgeInsets.symmetric(horizontal: 20.0, vertical: 40.0),
             child: Column(
               children: [
-                // --- BAGIAN HEADER (Logo & Teks) ---
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Image.asset(
-                    'assets/images/eduquestlogo.png',
-                    width: 60,
-                    height: 60,
-                  ),
+                // --- BAGIAN HEADER (Logo) ---
+                // Container putih sudah dihapus agar background logo mengikuti warna gradient
+                Image.asset(
+                  'assets/images/eduquestlogo1.png',
+                  width: 280,
                 ),
-                const SizedBox(height: 16),
-                const Text(
-                  "EduQuest",
-                  style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  "Mulai Petualangan Belajarmu! 🎯",
-                  style: TextStyle(fontSize: 14, color: Colors.white70),
-                ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 12),
 
                 // --- BAGIAN KOTAK PUTIH (Form Daftar) ---
                 Container(

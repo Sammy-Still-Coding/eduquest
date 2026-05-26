@@ -18,7 +18,8 @@ class _AiHelperPageState extends State<AiHelperPage> {
   // ============================================================
   // GANTI DENGAN API KEY GROQ KAMU
   // ============================================================
-  final String apiKey = "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";
+  final String apiKey =
+      "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";
   final String modelName = "llama-3.3-70b-versatile";
 
   bool isPersonalHelper = true;
@@ -103,7 +104,8 @@ class _AiHelperPageState extends State<AiHelperPage> {
           chatHistory.add({"role": "ai", "message": reply});
         });
       } else {
-        throw Exception("Status: ${response.statusCode}, Body: ${response.body}");
+        throw Exception(
+            "Status: ${response.statusCode}, Body: ${response.body}");
       }
     } catch (e) {
       if (!mounted) return;
@@ -133,8 +135,7 @@ class _AiHelperPageState extends State<AiHelperPage> {
     try {
       final url = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
 
-      String promptContext =
-          "Evaluasi fakta ini: '$text'. "
+      String promptContext = "Evaluasi fakta ini: '$text'. "
           "Balas HANYA dengan format JSON persis seperti ini tanpa tambahan apapun: "
           "{\"score\": angka_0_sampai_100, \"explanation\": \"penjelasan singkat kenapa salah atau benar\"}";
 
@@ -164,10 +165,7 @@ class _AiHelperPageState extends State<AiHelperPage> {
         String reply = data['choices'][0]['message']['content'];
 
         // Bersihkan balasan dari karakter markdown (```json atau ```)
-        reply = reply
-            .replaceAll('```json', '')
-            .replaceAll('```', '')
-            .trim();
+        reply = reply.replaceAll('```json', '').replaceAll('```', '').trim();
 
         try {
           // ✅ Try-Catch khusus untuk parsing JSON agar tidak langsung crash jika AI ngaco
@@ -181,7 +179,8 @@ class _AiHelperPageState extends State<AiHelperPage> {
 
           // Jika skor bagus, tambah poin
           if (factScore != null && factScore! > 60) {
-            await _dbHelper.addPoints(widget.user.username, 5);
+            // ✨ Ganti baris yang merah menjadi seperti ini:
+            await _dbHelper.addPoints(widget.user?.username ?? '', 5);
 
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
@@ -201,12 +200,15 @@ class _AiHelperPageState extends State<AiHelperPage> {
           );
         }
       } else {
-        throw Exception("Status: ${response.statusCode}, Body: ${response.body}");
+        throw Exception(
+            "Status: ${response.statusCode}, Body: ${response.body}");
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Gagal mengecek fakta. Periksa internet atau coba lagi.")),
+          const SnackBar(
+              content: Text(
+                  "Gagal mengecek fakta. Periksa internet atau coba lagi.")),
         );
       }
     } finally {
@@ -226,10 +228,12 @@ class _AiHelperPageState extends State<AiHelperPage> {
       body: Column(
         children: [
           Container(
-            padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
+            padding:
+                const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
             decoration: BoxDecoration(
               color: _primaryPurple,
-              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(30)),
+              borderRadius:
+                  const BorderRadius.vertical(bottom: Radius.circular(30)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -246,7 +250,8 @@ class _AiHelperPageState extends State<AiHelperPage> {
                     ),
                     if (isPersonalHelper && chatHistory.isNotEmpty)
                       IconButton(
-                        icon: const Icon(Icons.delete_sweep, color: Colors.white70),
+                        icon: const Icon(Icons.delete_sweep,
+                            color: Colors.white70),
                         onPressed: () async {
                           await _dbHelper.clearChatHistory();
                           _loadChatHistory();
@@ -324,7 +329,8 @@ class _AiHelperPageState extends State<AiHelperPage> {
             ),
           ),
           Expanded(
-            child: isPersonalHelper ? _buildPersonalHelper() : _buildFactChecker(),
+            child:
+                isPersonalHelper ? _buildPersonalHelper() : _buildFactChecker(),
           ),
         ],
       ),
@@ -370,7 +376,8 @@ class _AiHelperPageState extends State<AiHelperPage> {
                   ),
                   GestureDetector(
                     onTap: () => setState(() => _showInfoBanner = false),
-                    child: const Icon(Icons.close, size: 18, color: Colors.brown),
+                    child:
+                        const Icon(Icons.close, size: 18, color: Colors.brown),
                   ),
                 ],
               ),
@@ -390,9 +397,8 @@ class _AiHelperPageState extends State<AiHelperPage> {
                   itemBuilder: (context, index) {
                     bool isUser = chatHistory[index]["role"] == "user";
                     return Align(
-                      alignment: isUser
-                          ? Alignment.centerRight
-                          : Alignment.centerLeft,
+                      alignment:
+                          isUser ? Alignment.centerRight : Alignment.centerLeft,
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.all(14),
@@ -538,8 +544,7 @@ class _AiHelperPageState extends State<AiHelperPage> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16)),
+                  color: Colors.white, borderRadius: BorderRadius.circular(16)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -548,8 +553,8 @@ class _AiHelperPageState extends State<AiHelperPage> {
                           TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                   const SizedBox(height: 8),
                   Text(factExplanation,
-                      style: TextStyle(
-                          color: Colors.grey.shade700, height: 1.5)),
+                      style:
+                          TextStyle(color: Colors.grey.shade700, height: 1.5)),
                 ],
               ),
             )

@@ -70,9 +70,8 @@ class _LoginPageState extends State<LoginPage> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF6B48FF), // Ungu atas
-              Color(0xFF9D4EDD), // Ungu tengah
-              Color(0xFFE01E84), // Pink bawah
+              Color(0xFFF1FEC6), // Kuning pastel atas
+              Color(0xFFA882DD), // Ungu pastel bawah
             ],
           ),
         ),
@@ -82,33 +81,13 @@ class _LoginPageState extends State<LoginPage> {
                 const EdgeInsets.symmetric(horizontal: 20.0, vertical: 40.0),
             child: Column(
               children: [
-                // --- BAGIAN HEADER (Logo & Teks) ---
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Image.asset(
-                    'assets/images/eduquestlogo.png',
-                    width: 60,
-                    height: 60,
-                  ),
+                // --- BAGIAN HEADER (Logo) ---
+                // Container putih sudah dihapus agar background logo mengikuti warna gradient
+                Image.asset(
+                  'assets/images/eduquestlogo1.png',
+                  width: 280,
                 ),
-                const SizedBox(height: 16),
-                const Text(
-                  "EduQuest",
-                  style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  "Belajar Jadi Lebih Seru! 🚀",
-                  style: TextStyle(fontSize: 14, color: Colors.white70),
-                ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 12),
 
                 // --- BAGIAN KOTAK PUTIH (Form Login) ---
                 Container(
@@ -274,6 +253,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                     ],
+                    // Slogan tersemat logo terlihat jelas.
                   ),
                 ),
               ],

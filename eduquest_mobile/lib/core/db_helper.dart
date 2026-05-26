@@ -15,12 +15,11 @@ class DbHelper {
 
   Future<Database> _initDb() async {
     String pathDb = join(await getDatabasesPath(), 'eduquest_local.db');
-    
+
     return await openDatabase(
       pathDb,
-      version: 3, // 📍 Naik ke versi 3 untuk tabel forum (questions & answers)
+      version: 4,
       onCreate: (db, version) async {
-        // 1. Pembuatan tabel users
         await db.execute('''
           CREATE TABLE users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,11 +30,11 @@ class DbHelper {
             streak_count INTEGER DEFAULT 0,
             pet_name TEXT DEFAULT 'Eggie',
             pet_level INTEGER DEFAULT 1,
-            pet_exp INTEGER DEFAULT 0
+            pet_exp INTEGER DEFAULT 0,
+            profile_image TEXT DEFAULT '' 
           )
         ''');
 
-        // 2. Pembuatan tabel chats AI
         await db.execute('''
           CREATE TABLE chats (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,7 +44,6 @@ class DbHelper {
           )
         ''');
 
-        // 3. Pembuatan tabel questions (Forum)
         await db.execute('''
           CREATE TABLE questions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,7 +59,6 @@ class DbHelper {
           )
         ''');
 
-        // 4. Pembuatan tabel answers (Komentar Forum)
         await db.execute('''
           CREATE TABLE answers (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -75,7 +72,6 @@ class DbHelper {
         ''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
-        // Upgrade dari versi 1 ke 2 (Tambah tabel chat)
         if (oldVersion < 2) {
           await db.execute('''
             CREATE TABLE chats (
@@ -86,7 +82,6 @@ class DbHelper {
             )
           ''');
         }
-        // Upgrade dari versi 2 ke 3 (Tambah tabel forum tanpa perlu hapus aplikasi)
         if (oldVersion < 3) {
           await db.execute('''
             CREATE TABLE questions (
@@ -115,13 +110,16 @@ class DbHelper {
             )
           ''');
         }
+        if (oldVersion < 4) {
+          await db.execute(
+              'ALTER TABLE users ADD COLUMN profile_image TEXT DEFAULT ""');
+        }
       },
     );
   }
 
-  // --- KODE AUTENTIKASI USER ---
   String _hashPassword(String password) {
-    var bytes = utf8.encode(password); 
+    var bytes = utf8.encode(password);
     return sha256.convert(bytes).toString();
   }
 
@@ -129,7 +127,7 @@ class DbHelper {
     final db = await database;
     String encryptedPassword = _hashPassword(user.password);
     Map<String, dynamic> row = user.toMap();
-    row['password'] = encryptedPassword; 
+    row['password'] = encryptedPassword;
     try {
       return await db.insert('users', row);
     } catch (e) {
@@ -151,14 +149,39 @@ class DbHelper {
     return null;
   }
 
-  // --- FUNGSI MENGAMBIL DATA USER TERBARU (Untuk Sync Real-Time) ---
-  Future<UserModel?> getUserData(String username) async {
+  // --- AMBIL DATA USER (SINKRONISASI REAL-TIME) ---
+  Future<UserModel?> getUserRealtime(String username) async {
     final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query('users', where: 'username = ?', whereArgs: [username]);
+    final List<Map<String, dynamic>> maps =
+        await db.query('users', where: 'username = ?', whereArgs: [username]);
     if (maps.isNotEmpty) {
       return UserModel.fromMap(maps.first);
     }
     return null;
+  }
+
+  Future<UserModel?> getUserData(String username) async {
+    return await getUserRealtime(username);
+  }
+
+  // --- UPDATE FOTO PROFIL ---
+  Future<int> updateUserProfileImage(String username, String imagePath) async {
+    final db = await database;
+    return await db.update(
+      'users',
+      {'profile_image': imagePath},
+      where: 'username = ?',
+      whereArgs: [username],
+    );
+  }
+
+  // --- SISTEM POIN ---
+  Future<void> addPoints(String username, int points) async {
+    final db = await database;
+    await db.rawUpdate(
+      'UPDATE users SET points = points + ? WHERE username = ?',
+      [points, username],
+    );
   }
 
   // --- MANAJEMEN CHAT AI ---
@@ -172,8 +195,9 @@ class DbHelper {
 
   Future<List<Map<String, String>>> getChatHistory() async {
     final db = await database;
-    List<Map<String, dynamic>> maps = await db.query('chats', orderBy: 'id ASC');
-    
+    List<Map<String, dynamic>> maps =
+        await db.query('chats', orderBy: 'id ASC');
+
     return List.generate(maps.length, (i) {
       return {
         'role': maps[i]['role'].toString(),
@@ -186,86 +210,65 @@ class DbHelper {
     final db = await database;
     await db.delete('chats');
   }
-  
-  // --- FITUR GAMIFIKASI: TAMBAH POIN & NAIK LEVEL ---
-  Future<void> addPoints(String username, int pointsToAdd) async {
-    final db = await database;
-    List<Map<String, dynamic>> maps = await db.query('users', where: 'username = ?', whereArgs: [username]);
-    
-    if (maps.isNotEmpty) {
-      int currentPoints = maps.first['points'] as int;
-      int newPoints = currentPoints + pointsToAdd;
 
-      int newLevel = 1;
-      if (newPoints >= 200) {
-        newLevel = 5;
-      } else if (newPoints >= 150) newLevel = 4;
-      else if (newPoints >= 100) newLevel = 3;
-      else if (newPoints >= 50) newLevel = 2;
-
-      await db.update(
-        'users', 
-        {'points': newPoints, 'pet_level': newLevel}, 
-        where: 'username = ?', 
-        whereArgs: [username]
-      );
-    }
-  }
-
-  // --- FUNGSI FORUM (MENGAMBIL PERTANYAAN DENGAN FILTER & SEARCH) ---
-  Future<List<Map<String, dynamic>>> getQuestions(String query, String category) async {
-    final db = await database;
-    String whereString = "";
-    List<dynamic> whereArgs = [];
-
-    if (category != "Semua") {
-      whereString += "category = ?";
-      whereArgs.add(category);
-    }
-
-    if (query.isNotEmpty) {
-      if (whereString.isNotEmpty) whereString += " AND ";
-      whereString += "(question LIKE ? OR description LIKE ? OR tags LIKE ?)";
-      whereArgs.addAll(["%$query%", "%$query%", "%$query%"]);
-    }
-
-    return await db.query(
-      'questions',
-      where: whereString.isEmpty ? null : whereString,
-      whereArgs: whereArgs.isEmpty ? null : whereArgs,
-      orderBy: "id DESC", // Pertanyaan terbaru muncul di paling atas
-    );
-  }
-  // --- FUNGSI TAMBAH PERTANYAAN BARU ---
+  // --- MANAJEMEN FORUM & STATS ---
   Future<int> insertQuestion(Map<String, dynamic> questionData) async {
     final db = await database;
     return await db.insert('questions', questionData);
   }
 
-  // --- FUNGSI FORUM JAWABAN ---
+  Future<List<Map<String, dynamic>>> getQuestions(
+      String searchQuery, String selectedCategory) async {
+    final db = await database;
+    String whereClause = '';
+    List<dynamic> whereArgs = [];
+
+    if (searchQuery.isNotEmpty) {
+      whereClause += 'question LIKE ?';
+      whereArgs.add('%$searchQuery%');
+    }
+
+    if (selectedCategory != 'Semua' && selectedCategory.isNotEmpty) {
+      if (whereClause.isNotEmpty) whereClause += ' AND ';
+      whereClause += 'category = ?';
+      whereArgs.add(selectedCategory);
+    }
+
+    if (whereClause.isNotEmpty) {
+      return await db.query('questions',
+          where: whereClause, whereArgs: whereArgs, orderBy: 'id DESC');
+    } else {
+      return await db.query('questions', orderBy: 'id DESC');
+    }
+  }
+
   Future<int> insertAnswer(Map<String, dynamic> answerData) async {
     final db = await database;
-    // Update jumlah komentar di tabel questions
-    await db.rawUpdate('UPDATE questions SET comments = comments + 1 WHERE id = ?', [answerData['question_id']]);
+    await db.rawUpdate(
+        'UPDATE questions SET comments = comments + 1 WHERE id = ?',
+        [answerData['question_id']]);
     return await db.insert('answers', answerData);
   }
 
   Future<List<Map<String, dynamic>>> getAnswers(int questionId) async {
     final db = await database;
-    return await db.query('answers', where: 'question_id = ?', whereArgs: [questionId], orderBy: 'id ASC');
+    return await db.query('answers',
+        where: 'question_id = ?', whereArgs: [questionId], orderBy: 'id ASC');
   }
-  // --- FUNGSI AMBIL STATISTIK REAL-TIME ---
+
   Future<Map<String, int>> getUserStats(String username) async {
     final db = await database;
-    
-    // Hitung Pertanyaan
-    final qCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM questions WHERE username = ?', [username])) ?? 0;
-    
-    // Hitung Jawaban
-    final aCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM answers WHERE username = ?', [username])) ?? 0;
-    
-    // Hitung Chat AI (Mengambil total chat yang ada)
-    final aiCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM chats')) ?? 0;
+
+    final qCount = Sqflite.firstIntValue(await db.rawQuery(
+            'SELECT COUNT(*) FROM questions WHERE username = ?',
+            [username])) ??
+        0;
+    final aCount = Sqflite.firstIntValue(await db.rawQuery(
+            'SELECT COUNT(*) FROM answers WHERE username = ?', [username])) ??
+        0;
+    final aiCount = Sqflite.firstIntValue(
+            await db.rawQuery('SELECT COUNT(*) FROM chats')) ??
+        0;
 
     return {
       'questions': qCount,
@@ -274,7 +277,6 @@ class DbHelper {
     };
   }
 
-  // --- FUNGSI UPDATE NAMA USER ---
   Future<void> updateUsername(String oldUsername, String newUsername) async {
     final db = await database;
     await db.update(
@@ -284,4 +286,4 @@ class DbHelper {
       whereArgs: [oldUsername],
     );
   }
-}
+} // Tanda penutup kelas DbHelper utama

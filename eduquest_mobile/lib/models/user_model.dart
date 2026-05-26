@@ -8,6 +8,8 @@ class UserModel {
   final String petName;
   final int petLevel;
   final int petExp;
+  String?
+      profileImage; // 💡 1. TAMBAHKAN VARIABEL BARU DI SINI (Bisa null atau string kosong)
 
   UserModel({
     this.id,
@@ -19,6 +21,7 @@ class UserModel {
     this.petName = 'Eggie',
     this.petLevel = 1,
     this.petExp = 0,
+    this.profileImage = '', // 💡 2. TAMBAHKAN DEFAULT VALUE DI CONSTRUCTOR
   });
 
   // Mengubah objek UserModel menjadi Map (untuk dimasukkan ke SQLite)
@@ -33,6 +36,7 @@ class UserModel {
       'pet_name': petName,
       'pet_level': petLevel,
       'pet_exp': petExp,
+      'profile_image': profileImage, // 💡 3. DAFTARKAN KEY DATABASE DI SINI
     };
   }
 
@@ -48,6 +52,8 @@ class UserModel {
       petName: map['pet_name'] ?? 'Eggie',
       petLevel: map['pet_level'] ?? 1,
       petExp: map['pet_exp'] ?? 0,
+      profileImage:
+          map['profile_image'] ?? '', // 💡 4. AMBIL DATA DARI MAP DB DI SINI
     );
   }
 }

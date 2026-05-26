@@ -1,9 +1,13 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import '../core/db_helper.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/user_model.dart';
+import 'register_page.dart';
 
 class ProfilPage extends StatefulWidget {
   final UserModel user;
+
   const ProfilPage({super.key, required this.user});
 
   @override
@@ -11,67 +15,192 @@ class ProfilPage extends StatefulWidget {
 }
 
 class _ProfilPageState extends State<ProfilPage> {
-  Map<String, int> stats = {'questions': 0, 'answers': 0, 'ai_chats': 0};
+  File? _imageFile;
+  final ImagePicker _picker = ImagePicker();
+
+  late String _currentUsername;
+  final TextEditingController _nameController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _loadStats();
+    _currentUsername = widget.user.username;
   }
 
-  // Mengambil data statistik dari database
-  Future<void> _loadStats() async {
-    final data = await DbHelper().getUserStats(widget.user.username);
-    if (mounted) {
-      setState(() => stats = data);
+  // Fungsi membuka tautan eksternal saat www.EduQuest.com ditekan
+  Future<void> _bukaWebEduQuest() async {
+    final Uri url = Uri.parse('https://www.eduquest.com');
+    try {
+      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+        throw Exception('Tidak bisa membuka $url');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Membuka web EduQuest: $url'),
+          backgroundColor: Colors.blueAccent,
+        ),
+      );
     }
   }
 
-  // Logika Nama Level
-  String getLevelTitle(int level) {
-    switch (level) {
-      case 1: return "Rookie";
-      case 2: return "Intermediate";
-      case 3: return "Scholar";
-      case 4: return "Master";
-      case 5: return "Legend";
-      default: return "Novice";
+  // Fungsi mengambil foto dari galeri
+  Future<void> _pilihFotoProfil() async {
+    try {
+      final XFile? pickedFile = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+
+      if (pickedFile != null) {
+        setState(() {
+          _imageFile = File(pickedFile.path);
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Foto profil berhasil diperbarui! ✨'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal mengambil gambar: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
-  // 📍 FUNGSI POP-UP EDIT PROFIL
-  void _showEditProfileDialog() {
-    TextEditingController nameController = TextEditingController(text: widget.user.username);
-    
+  // Dialog Ubah Nama
+  void _tampilkanDialogUbahNama() {
+    _nameController.text = _currentUsername;
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text("Edit Profil"),
+          title: const Text("Ubah Nama"),
           content: TextField(
-            controller: nameController,
-            decoration: const InputDecoration(labelText: "Nama Baru", border: OutlineInputBorder()),
+            controller: _nameController,
+            decoration: const InputDecoration(
+              hintText: "Masukkan nama baru...",
+              focusedBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Color(0xFF6B48FF))),
+            ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal")),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Batal", style: TextStyle(color: Colors.grey)),
+            ),
             ElevatedButton(
-              onPressed: () async {
-                if (nameController.text.trim().isNotEmpty) {
-                  await DbHelper().updateUsername(widget.user.username, nameController.text.trim());
-                  
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6B48FF)),
+              onPressed: () {
+                if (_nameController.text.trim().isNotEmpty) {
                   setState(() {
-                    widget.user.username = nameController.text.trim();
+                    _currentUsername = _nameController.text.trim();
                   });
-                  
-                  if (!mounted) return;
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Nama berhasil diubah!")));
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Nama pengguna berhasil diubah!')),
+                  );
                 }
               },
-              child: const Text("Simpan"),
-            )
+              child:
+                  const Text("Simpan", style: TextStyle(color: Colors.white)),
+            ),
           ],
+        );
+      },
+    );
+  }
+
+  // Dialog Bersihkan Data Profil
+  void _tampilkanDialogHapusProfil() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.person_off_rounded, color: Colors.red),
+              SizedBox(width: 8),
+              Text('Hapus Data Profil?'),
+            ],
+          ),
+          content: const Text(
+              'Apakah kamu yakin ingin mengosongkan data profil ini? Tindakan ini hanya membersihkan foto profil kamu tanpa menghapus akun.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () {
+                setState(() {
+                  _imageFile = null;
+                });
+                Navigator.pop(context);
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Data profil berhasil dibersihkan.'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+              },
+              child: const Text('Ya, Bersihkan',
+                  style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Bottom Sheet Menu Edit Profile
+  void _tampilkanMenuEditProfile() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                "Pengaturan Profil",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              ListTile(
+                leading: const Icon(Icons.edit, color: Color(0xFF6B48FF)),
+                title: const Text("Ubah Nama Pengguna"),
+                onTap: () {
+                  _tampilkanDialogUbahNama();
+                },
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.no_accounts_rounded,
+                    color: Colors.redAccent),
+                title: const Text("Hapus Data Profil",
+                    style: TextStyle(color: Colors.redAccent)),
+                onTap: () {
+                  _tampilkanDialogHapusProfil();
+                },
+              ),
+            ],
+          ),
         );
       },
     );
@@ -79,109 +208,319 @@ class _ProfilPageState extends State<ProfilPage> {
 
   @override
   Widget build(BuildContext context) {
-    double progress = (widget.user.points % 50) / 50.0;
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: const Color(0xFFF9FAFB),
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // Header
+            // --- HEADER UNGU ---
             Container(
-              padding: const EdgeInsets.only(top: 60, bottom: 30),
+              width: double.infinity,
+              padding: const EdgeInsets.only(
+                  top: 60, bottom: 30, left: 24, right: 24),
               decoration: const BoxDecoration(
-                color: Color(0xFF7B61FF),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
+                color: Color(0xFF6B48FF),
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(32),
+                  bottomRight: Radius.circular(32),
+                ),
               ),
               child: Column(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                      // 📍 Tombol Settings
-                      IconButton(icon: const Icon(Icons.settings, color: Colors.white), onPressed: () {
-                         // Arahkan ke halaman settings nanti
-                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Halaman Settings (Next step)")));
-                      }),
-                    ]),
+                  GestureDetector(
+                    onTap: _pilihFotoProfil,
+                    child: Stack(
+                      alignment: Alignment.bottomRight,
+                      children: [
+                        CircleAvatar(
+                          radius: 50,
+                          backgroundColor: Colors.white,
+                          child: CircleAvatar(
+                            radius: 47,
+                            backgroundColor: const Color(0xFFE0E0E0),
+                            backgroundImage: _imageFile != null
+                                ? FileImage(_imageFile!)
+                                : null,
+                            child: _imageFile == null
+                                ? const Icon(Icons.person,
+                                    size: 55, color: Colors.grey)
+                                : null,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: const BoxDecoration(
+                              color: Colors.white, shape: BoxShape.circle),
+                          child: const Icon(Icons.camera_alt,
+                              size: 16, color: Color(0xFF6B48FF)),
+                        ),
+                      ],
+                    ),
                   ),
-                  const CircleAvatar(radius: 50, backgroundColor: Colors.white, child: Icon(Icons.person, size: 50, color: Color(0xFF7B61FF))),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        _currentUsername,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: _tampilkanMenuEditProfile,
+                        child: const Icon(Icons.edit,
+                            color: Colors.white70, size: 18),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.user.email,
+                    style: const TextStyle(color: Colors.white70, fontSize: 14),
+                  ),
                   const SizedBox(height: 12),
-                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Text(widget.user.username, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                    // 📍 Tombol Edit Nama (Panggil Pop-up)
-                    IconButton(icon: const Icon(Icons.edit, size: 16, color: Colors.white70), onPressed: _showEditProfileDialog),
-                  ]),
-                  Text(widget.user.email, style: const TextStyle(color: Colors.white70)),
-                  const SizedBox(height: 10),
-                  Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6), decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)), child: Text("Level ${widget.user.petLevel} ${getLevelTitle(widget.user.petLevel)}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                ],
-              ),
-            ),
-            
-            // Stats Row
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  Row(children: [
-                    _buildStatBox("Poin", "${widget.user.points}", Colors.amber),
-                    _buildStatBox("Streak", "${widget.user.streakCount}", Colors.orange),
-                    _buildStatBox("Level", "${widget.user.petLevel}", Colors.green),
-                  ]),
-                  const SizedBox(height: 20),
-                  // Progress Bar Level
-                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("Progress ke Level ${widget.user.petLevel + 1}"), Text("${widget.user.points % 50}/50")]),
-                    const SizedBox(height: 8),
-                    LinearProgressIndicator(value: progress, color: const Color(0xFF7B61FF), backgroundColor: Colors.grey.shade300),
-                  ]),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      "Level 1 Rookie",
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14),
+                    ),
+                  ),
                 ],
               ),
             ),
 
-            // Pencapaian & Statistik
+            // --- KONTEN UTAMA PROFILE ---
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.all(20.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("Pencapaian", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  const SizedBox(height: 10),
-                  Wrap(spacing: 10, runSpacing: 10, children: [
-                    _buildBadge("Rookie", Icons.child_care, widget.user.petLevel >= 1),
-                    _buildBadge("Intermediate", Icons.auto_graph, widget.user.petLevel >= 2),
-                    _buildBadge("Scholar", Icons.school, widget.user.petLevel >= 3),
-                    _buildBadge("Master", Icons.psychology, widget.user.petLevel >= 4),
-                    _buildBadge("Legend", Icons.workspace_premium, widget.user.petLevel >= 5),
-                  ]),
-                  const SizedBox(height: 20),
-                  const Text("Statistik Belajar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  const SizedBox(height: 10),
-                  _buildListTile("Pertanyaan Dijawab", "${stats['questions']}", Icons.question_answer),
-                  _buildListTile("Jawaban Diberikan", "${stats['answers']}", Icons.comment),
-                  _buildListTile("Chat dengan AI", "${stats['ai_chats']}", Icons.auto_awesome),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () => Navigator.pop(context), 
-                      icon: const Icon(Icons.logout, color: Colors.red),
-                      label: const Text("Keluar", style: TextStyle(color: Colors.red)),
-                      style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
+                  Row(
+                    children: [
+                      _buildStatBox("5", "Poin"),
+                      const SizedBox(width: 12),
+                      _buildStatBox("0", "Streak"),
+                      const SizedBox(width: 12),
+                      _buildStatBox("1", "Level"),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("Progress ke Level 2",
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 14)),
+                      Text("5/50",
+                          style: TextStyle(color: Colors.grey, fontSize: 14)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: const LinearProgressIndicator(
+                      value: 5 / 50,
+                      minHeight: 8,
+                      backgroundColor: Color(0xFFE0E0E0),
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(Color(0xFF6B48FF)),
                     ),
                   ),
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 24),
+
+                  const Text("Pencapaian",
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      _buildBadge("😊 Rookie", isActive: true),
+                      _buildBadge("🪄 Intermediate", isActive: false),
+                      _buildBadge("🎓 Scholar", isActive: false),
+                      _buildBadge("🕵️ Master", isActive: false),
+                      _buildBadge("🌟 Legend", isActive: false),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  const Text("Statistik Belajar",
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E1E2C))),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.grey.shade100),
+                    ),
+                    child: Column(
+                      children: [
+                        _buildRowStatDetail(Icons.chat_bubble_outline_rounded,
+                            "Pertanyaan Dijawab", "0"),
+                        const Divider(height: 24, thickness: 0.5),
+                        _buildRowStatDetail(
+                            Icons.indeterminate_check_box_outlined,
+                            "Jawaban Diberikan",
+                            "0"),
+                        const Divider(height: 24, thickness: 0.5),
+                        _buildRowStatDetail(
+                            Icons.auto_awesome_outlined, "Chat dengan AI", "4"),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Tombol Keluar Navigasi ke RegisterPage
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.red.shade300, width: 1),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24)),
+                        foregroundColor: Colors.redAccent,
+                      ),
+                      onPressed: () {
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => const RegisterPage()),
+                          (route) => false,
+                        );
+                      },
+                      icon: const Icon(Icons.logout, size: 18),
+                      label: const Text("Keluar",
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 15)),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // 💡 MODIFIKASI TERBARU: Sekarang yang bisa diklik hanya www.EduQuest.com
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Teks "Hubungi Kami" biasa (Abu-abu, tebal, tidak bisa diklik)
+                      const Text(
+                        "Hubungi Kami",
+                        style: TextStyle(
+                          color: Colors.grey,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      // Teks "www.EduQuest.com" dibungkus InkWell (Biru, tipis, BISA DIKLIK)
+                      InkWell(
+                        onTap: _bukaWebEduQuest,
+                        borderRadius: BorderRadius.circular(4),
+                        child: const Padding(
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                          child: Text(
+                            "www.EduQuest.com",
+                            style: TextStyle(
+                              color: Colors.blue,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w300,
+                              decoration: TextDecoration
+                                  .underline, // Opsional: garis bawah khas link web
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
                 ],
               ),
-            )
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStatBox(String title, String val, Color color) => Expanded(child: Container(margin: const EdgeInsets.symmetric(horizontal: 4), padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: color.withValues(alpha: 0.3))), child: Column(children: [Text(val, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey))])));
-  Widget _buildBadge(String title, IconData icon, bool unlocked) => Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: unlocked ? Colors.amber.shade50 : Colors.grey.shade100, border: Border.all(color: unlocked ? Colors.amber : Colors.grey.shade300), borderRadius: BorderRadius.circular(10)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, color: unlocked ? Colors.amber : Colors.grey), const SizedBox(width: 5), Text(title, style: TextStyle(color: unlocked ? Colors.black : Colors.grey))]));
-  Widget _buildListTile(String title, String val, IconData icon) => ListTile(leading: Icon(icon, color: const Color(0xFF7B61FF)), title: Text(title), trailing: Text(val, style: const TextStyle(fontWeight: FontWeight.bold)));
+  Widget _buildRowStatDetail(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, color: const Color(0xFF6B48FF), size: 20),
+        const SizedBox(width: 12),
+        Text(label,
+            style: const TextStyle(
+                fontSize: 14,
+                color: Colors.black87,
+                fontWeight: FontWeight.w500)),
+        const Spacer(),
+        Text(value,
+            style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87)),
+      ],
+    );
+  }
+
+  Widget _buildStatBox(String value, String title) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          children: [
+            Text(value,
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text(title,
+                style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBadge(String text, {required bool isActive}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: isActive ? const Color(0xFFFFF3CD) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+            color: isActive ? const Color(0xFFFFE066) : Colors.grey.shade200),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: isActive ? const Color(0xFF8B5E34) : Colors.grey.shade400,
+          fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
+    );
+  }
 }
