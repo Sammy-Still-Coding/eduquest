@@ -17,9 +17,9 @@ class _AiHelperPageState extends State<AiHelperPage> {
 
   // ============================================================
   // GANTI DENGAN API KEY GROQ KAMU
+  // LINK API KEY : https://console.groq.com/keys
   // ============================================================
-  final String apiKey =
-      "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";
+  final String apiKey = "GANTI DENGAN API KEY GROQ KAMU";
   final String modelName = "llama-3.3-70b-versatile";
 
   bool isPersonalHelper = true;
@@ -43,8 +43,9 @@ class _AiHelperPageState extends State<AiHelperPage> {
   }
 
   void _loadChatHistory() async {
-    var history = await _dbHelper.getChatHistory();
-    if (!mounted) return; // ✅ Mencegah error jika widget sudah ditutup
+    // 📍 Mengirim username agar yang diload hanya history akun yang sedang login
+    var history = await _dbHelper.getChatHistory(widget.user.username);
+    if (!mounted) return;
     setState(() {
       chatHistory = history;
     });
@@ -55,7 +56,8 @@ class _AiHelperPageState extends State<AiHelperPage> {
     String text = _chatController.text.trim();
     if (text.isEmpty) return;
 
-    await _dbHelper.saveMessage("user", text);
+    // 📍 Menyimpan chat dengan menyertakan username
+    await _dbHelper.saveMessage(widget.user.username, "user", text);
 
     setState(() {
       chatHistory.add({"role": "user", "message": text});
@@ -97,9 +99,10 @@ class _AiHelperPageState extends State<AiHelperPage> {
         final data = jsonDecode(response.body);
         String reply = data['choices'][0]['message']['content'];
 
-        await _dbHelper.saveMessage("ai", reply);
+        // 📍 Menyimpan balasan AI dengan menyertakan username
+        await _dbHelper.saveMessage(widget.user.username, "ai", reply);
 
-        if (!mounted) return; // ✅ Mencegah memory leak
+        if (!mounted) return;
         setState(() {
           chatHistory.add({"role": "ai", "message": reply});
         });
@@ -122,7 +125,6 @@ class _AiHelperPageState extends State<AiHelperPage> {
   }
 
   // --- FUNGSI FACT CHECKER (GROQ API) ---
-  // --- FUNGSI FACT CHECKER (GROQ API) ---
   Future<void> _checkFact() async {
     String text = _factController.text.trim();
     if (text.isEmpty) return;
@@ -136,7 +138,6 @@ class _AiHelperPageState extends State<AiHelperPage> {
     try {
       final url = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
 
-      // 1. BAGIAN PROMPT YANG DIUBAH (Ditambahkan acuan skala nilai agar bervariasi)
       String promptContext = "Evaluasi keakuratan fakta ini: '$text'.\n\n"
           "Berikan penilaian skor dengan ketentuan skala berikut:\n"
           "- 100: Fakta sepenuhnya benar dan akurat.\n"
@@ -159,7 +160,6 @@ class _AiHelperPageState extends State<AiHelperPage> {
             {
               "role": "system",
               "content":
-                  // Perubahan system prompt agar AI menilai objektif secara detail (tidak biner kaku)
                   "Kamu adalah fact checker objektif yang menilai kebenaran informasi berdasarkan skala detail."
             },
             {"role": "user", "content": promptContext}
@@ -173,7 +173,6 @@ class _AiHelperPageState extends State<AiHelperPage> {
         final data = jsonDecode(response.body);
         String reply = data['choices'][0]['message']['content'];
 
-        // Bersihkan balasan dari karakter markdown (```json atau ```)
         reply = reply.replaceAll('```json', '').replaceAll('```', '').trim();
 
         try {
@@ -185,9 +184,7 @@ class _AiHelperPageState extends State<AiHelperPage> {
             factExplanation = jsonReply['explanation'];
           });
 
-          // Jika skor bagus, tambah poin
           if (factScore != null && factScore! > 60) {
-            // 2. BAGIAN YANG DIUBAH (Dibersihkan dari widget.user?.username karena widget.user sudah non-nullable)
             await _dbHelper.addPoints(widget.user.username, 5);
 
             if (!mounted) return;
@@ -220,7 +217,6 @@ class _AiHelperPageState extends State<AiHelperPage> {
         );
       }
     } finally {
-      // 3. BAGIAN YANG DIUBAH (Typo diperbaiki dari 'finaly' menjadi 'finally' agar tidak error)
       if (mounted) {
         setState(() {
           isFactLoading = false;
@@ -231,7 +227,6 @@ class _AiHelperPageState extends State<AiHelperPage> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ FIX UTAMA: Menggunakan Scaffold sebagai kerangka layar utama
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
       body: Column(
@@ -262,7 +257,8 @@ class _AiHelperPageState extends State<AiHelperPage> {
                         icon: const Icon(Icons.delete_sweep,
                             color: Colors.white70),
                         onPressed: () async {
-                          await _dbHelper.clearChatHistory();
+                          // 📍 Menghapus history dengan menyertakan username
+                          await _dbHelper.clearChatHistory(widget.user.username);
                           _loadChatHistory();
                         },
                       )

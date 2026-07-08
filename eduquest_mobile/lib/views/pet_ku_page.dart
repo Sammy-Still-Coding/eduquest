@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // 📍 Tambahan import
 import '../core/db_helper.dart';
 import '../models/user_model.dart';
 
@@ -24,7 +25,7 @@ class _PetKuPageState extends State<PetKuPage> {
   // State Kustomisasi Pet
   String petName = "Eggie";
   String selectedPetEmoji = "🐣";
-  String selectedItemEmoji = ""; // Awalnya tidak memegang apa-apa
+  String selectedItemEmoji = ""; 
   final TextEditingController _nameController = TextEditingController();
 
   // Master Data Karakter Pet
@@ -36,7 +37,7 @@ class _PetKuPageState extends State<PetKuPage> {
     {"emoji": "🐉", "name": "Draco (Naga Master)", "level_req": 5},
   ];
 
-  // 📍 MASTER DATA AKSESORIS BARU & SYARAT LEVELNYA
+  // Master Data Aksesoris
   final List<Map<String, dynamic>> itemOptions = [
     {"emoji": "", "name": "Tanpa Item", "level_req": 1},
     {"emoji": "✏️", "name": "Pensil Belajar", "level_req": 2},
@@ -48,7 +49,7 @@ class _PetKuPageState extends State<PetKuPage> {
   @override
   void initState() {
     super.initState();
-    _loadPetData();
+    _loadPetData(); // 📍 Fungsi ini akan dipanggil otomatis saat halaman dibuka
     
     _screenTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
       if (mounted) {
@@ -66,32 +67,53 @@ class _PetKuPageState extends State<PetKuPage> {
     super.dispose();
   }
 
+  // 📍 LOGIKA MEMUAT DATA YANG TERSIMPAN (NAMA, EMOJI, AKSESORIS)
   Future<void> _loadPetData() async {
     final db = await _dbHelper.database;
     final data = await db.query('users', where: 'username = ?', whereArgs: [widget.user.username]);
+    
+    // 📍 Ambil data kosmetik (Emoji & Item) dari memori HP, khusus untuk user ini
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String savedEmoji = prefs.getString('pet_emoji_${widget.user.username}') ?? "🐣";
+    String savedItem = prefs.getString('pet_item_${widget.user.username}') ?? "";
+
     if (data.isNotEmpty) {
+      int dbPoints = data.first['points'] as int;
+      int dbLevel = data.first['pet_level'] as int;
+      String dbPetName = data.first['pet_name']?.toString() ?? "Eggie"; // 📍 Ambil nama dari SQLite
+
+      // Logika Level Up
+      int expectedLevel = (dbPoints ~/ 50) + 1;
+      if (expectedLevel > 5) expectedLevel = 5; 
+
+      if (expectedLevel > dbLevel) {
+        await db.rawUpdate(
+          'UPDATE users SET pet_level = ? WHERE username = ?',
+          [expectedLevel, widget.user.username]
+        );
+        dbLevel = expectedLevel; 
+      }
+
       setState(() {
-        currentPoints = data.first['points'] as int;
-        currentLevel = data.first['pet_level'] as int;
+        currentPoints = dbPoints;
+        currentLevel = dbLevel;
+        
+        // 📍 Terapkan data yang tersimpan ke tampilan!
+        petName = dbPetName;
+        selectedPetEmoji = savedEmoji;
+        selectedItemEmoji = savedItem;
       });
     }
   }
 
   double get levelProgress {
-    // Jika sudah level 5, bar selalu penuh
     if (currentLevel >= 5) return 1.0;
-    
-    // Rumus: Sisa poin dibagi target per level (50)
-    // Contoh: Poin 60. 60 % 50 = 10. Progres = 10 / 50 = 0.2 (20%)
     double progress = (currentPoints % 50) / 50.0;
-    return progress.clamp(0.0, 1.0); // Memastikan angka tidak lebih dari 1 atau kurang dari 0
+    return progress.clamp(0.0, 1.0); 
   }
 
-  // Teks target poin selanjutnya
   String get nextLevelTarget {
     if (currentLevel >= 5) return "MAX LEVEL";
-    
-    // Level 1 targetnya 50, Level 2 targetnya 100, dst.
     int nextTarget = currentLevel * 50; 
     return "$currentPoints / $nextTarget Pts";
   }
@@ -124,7 +146,6 @@ class _PetKuPageState extends State<PetKuPage> {
                     const Text("Pilih Karakter:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFFB53471))),
                     const SizedBox(height: 8),
                     
-                    // List Karakter Pet
                     ...petOptions.map((pet) {
                       bool isUnlocked = currentLevel >= pet['level_req'];
                       bool isSelected = selectedPetEmoji == pet['emoji'];
@@ -141,7 +162,6 @@ class _PetKuPageState extends State<PetKuPage> {
                     const Text("Benda yang Dipegang:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.blueAccent)),
                     const SizedBox(height: 8),
 
-                    // 📍 LIST AKSESORIS BARU
                     ...itemOptions.map((item) {
                       bool isUnlocked = currentLevel >= item['level_req'];
                       bool isSelected = selectedItemEmoji == item['emoji'];
@@ -158,16 +178,30 @@ class _PetKuPageState extends State<PetKuPage> {
                 ),
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal", style: TextStyle(color: Colors.grey))),
+                TextButton(onPressed: () {
+                   // 📍 Jika batal, kembalikan ke wujud awal sebelum diedit
+                   _loadPetData(); 
+                   Navigator.pop(context);
+                }, child: const Text("Batal", style: TextStyle(color: Colors.grey))),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB53471), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  onPressed: () {
+                  onPressed: () async {
                     setState(() {
                       if (_nameController.text.trim().isNotEmpty) {
                         petName = _nameController.text.trim();
                       }
                     });
-                    Navigator.pop(context);
+                    
+                    // 1. Simpan Nama Pet ke SQLite
+                    final db = await _dbHelper.database;
+                    await db.rawUpdate('UPDATE users SET pet_name = ? WHERE username = ?', [petName, widget.user.username]);
+                    
+                    // 2. 📍 Simpan Emoji & Aksesoris ke Shared Preferences (Berdasarkan Username)
+                    SharedPreferences prefs = await SharedPreferences.getInstance();
+                    await prefs.setString('pet_emoji_${widget.user.username}', selectedPetEmoji);
+                    await prefs.setString('pet_item_${widget.user.username}', selectedItemEmoji);
+                    
+                    if (context.mounted) Navigator.pop(context);
                   },
                   child: const Text("Simpan"),
                 ),
@@ -196,7 +230,9 @@ class _PetKuPageState extends State<PetKuPage> {
             children: [
               Row(
                 children: [
-                  Container(decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle), child: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () {})),
+                  Container(decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle), child: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () {
+                     Navigator.pop(context);
+                  })),
                   const SizedBox(width: 16),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -233,7 +269,6 @@ class _PetKuPageState extends State<PetKuPage> {
                   ),
                   child: Column(
                     children: [
-                      // 📍 LOGIKA DISPLAY COMBINE: EMOJI PET + AKSESORIS
                       Stack(
                         alignment: Alignment.center,
                         children: [

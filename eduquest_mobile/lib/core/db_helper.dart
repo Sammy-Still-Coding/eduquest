@@ -18,7 +18,7 @@ class DbHelper {
 
     return await openDatabase(
       pathDb,
-      version: 4,
+      version: 5, // 📍 Versi dinaikkan menjadi 5
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE users (
@@ -35,9 +35,11 @@ class DbHelper {
           )
         ''');
 
+        // 📍 Ditambahkan kolom username untuk memisahkan chat
         await db.execute('''
           CREATE TABLE chats (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT,
             role TEXT NOT NULL,
             message TEXT NOT NULL,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -114,6 +116,11 @@ class DbHelper {
           await db.execute(
               'ALTER TABLE users ADD COLUMN profile_image TEXT DEFAULT ""');
         }
+        // 📍 Update untuk versi 5: Menambahkan kolom username ke tabel chats lama
+        if (oldVersion < 5) {
+          await db.execute(
+              'ALTER TABLE chats ADD COLUMN username TEXT DEFAULT ""');
+        }
       },
     );
   }
@@ -185,18 +192,25 @@ class DbHelper {
   }
 
   // --- MANAJEMEN CHAT AI ---
-  Future<int> saveMessage(String role, String message) async {
+  // 📍 Dimodifikasi: Menyimpan username pemilik chat
+  Future<int> saveMessage(String username, String role, String message) async {
     final db = await database;
     return await db.insert('chats', {
+      'username': username,
       'role': role,
       'message': message,
     });
   }
 
-  Future<List<Map<String, String>>> getChatHistory() async {
+  // 📍 Dimodifikasi: Mengambil chat khusus milik username yang sedang login
+  Future<List<Map<String, String>>> getChatHistory(String username) async {
     final db = await database;
-    List<Map<String, dynamic>> maps =
-        await db.query('chats', orderBy: 'id ASC');
+    List<Map<String, dynamic>> maps = await db.query(
+      'chats',
+      where: 'username = ?',
+      whereArgs: [username],
+      orderBy: 'id ASC',
+    );
 
     return List.generate(maps.length, (i) {
       return {
@@ -206,9 +220,10 @@ class DbHelper {
     });
   }
 
-  Future<void> clearChatHistory() async {
+  // 📍 Dimodifikasi: Menghapus chat khusus milik username yang sedang login
+  Future<void> clearChatHistory(String username) async {
     final db = await database;
-    await db.delete('chats');
+    await db.delete('chats', where: 'username = ?', whereArgs: [username]);
   }
 
   // --- MANAJEMEN FORUM & STATS ---
@@ -266,8 +281,9 @@ class DbHelper {
     final aCount = Sqflite.firstIntValue(await db.rawQuery(
             'SELECT COUNT(*) FROM answers WHERE username = ?', [username])) ??
         0;
-    final aiCount = Sqflite.firstIntValue(
-            await db.rawQuery('SELECT COUNT(*) FROM chats')) ??
+    // 📍 Dimodifikasi: Statistik chat hanya menghitung chat miliknya
+    final aiCount = Sqflite.firstIntValue(await db.rawQuery(
+            'SELECT COUNT(*) FROM chats WHERE username = ?', [username])) ??
         0;
 
     return {
@@ -286,4 +302,4 @@ class DbHelper {
       whereArgs: [oldUsername],
     );
   }
-} // Tanda penutup kelas DbHelper utama
+}

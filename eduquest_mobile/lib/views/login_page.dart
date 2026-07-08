@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // 📍 Tambahkan import ini
 import '../core/db_helper.dart';
 import '../models/user_model.dart';
 import 'dashboard_page.dart';
@@ -14,11 +15,11 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _dbHelper = DbHelper();
 
-  final _identifierController =
-      TextEditingController(); // Bisa diisi email atau username
+  final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
 
   bool _obscureText = true;
+  bool _rememberMe = false; // 📍 Tambahkan variabel state untuk Ingat Saya
 
   void _prosesLogin() async {
     String identifier = _identifierController.text.trim();
@@ -36,6 +37,13 @@ class _LoginPageState extends State<LoginPage> {
     UserModel? user = await _dbHelper.loginUser(identifier, password);
 
     if (user != null) {
+      // 📍 LOGIKA PENYIMPANAN SESSION (INGAT SAYA)
+      if (_rememberMe) {
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('isLoggedIn', true);
+        await prefs.setString('username', user.username); // Simpan username atau ID
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Selamat datang kembali, ${user.username}! ✨'),
@@ -43,7 +51,6 @@ class _LoginPageState extends State<LoginPage> {
         ),
       );
 
-      // 📍 PINDAH KE DASHBOARD MENGGUNAKAN pushReplacement
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => DashboardPage(user: user)),
@@ -61,7 +68,6 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Menghapus background color putih dan menggantinya dengan Container gradient
       body: Container(
         width: double.infinity,
         height: double.infinity,
@@ -70,8 +76,8 @@ class _LoginPageState extends State<LoginPage> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFFF1FEC6), // Kuning pastel atas
-              Color(0xFFA882DD), // Ungu pastel bawah
+              Color(0xFFF1FEC6),
+              Color(0xFFA882DD),
             ],
           ),
         ),
@@ -81,15 +87,11 @@ class _LoginPageState extends State<LoginPage> {
                 const EdgeInsets.symmetric(horizontal: 20.0, vertical: 40.0),
             child: Column(
               children: [
-                // --- BAGIAN HEADER (Logo) ---
-                // Container putih sudah dihapus agar background logo mengikuti warna gradient
                 Image.asset(
                   'assets/images/eduquestlogo1.png',
                   width: 280,
                 ),
                 const SizedBox(height: 12),
-
-                // --- BAGIAN KOTAK PUTIH (Form Login) ---
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(24),
@@ -100,7 +102,6 @@ class _LoginPageState extends State<LoginPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Judul Form
                       const Center(
                         child: Text(
                           "Masuk",
@@ -119,7 +120,6 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 32),
 
-                      // Label & Input Email
                       const Text(
                         "Email",
                         style: TextStyle(
@@ -145,7 +145,6 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 20),
 
-                      // Label & Input Password
                       const Text(
                         "Password",
                         style: TextStyle(
@@ -168,7 +167,6 @@ class _LoginPageState extends State<LoginPage> {
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide.none,
                           ),
-                          // Optional: Tetap berikan opsi melihat password (opsional, bisa dihapus jika tidak perlu)
                           suffixIcon: IconButton(
                             icon: Icon(
                                 _obscureText
@@ -183,16 +181,45 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 12),
 
-                      // Tombol Masuk
+                      // 📍 TAMBAHAN UI CHECKBOX "INGAT SAYA"
+                      Row(
+                        children: [
+                          SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: Checkbox(
+                              value: _rememberMe,
+                              onChanged: (value) {
+                                setState(() {
+                                  _rememberMe = value ?? false;
+                                });
+                              },
+                              activeColor: const Color(0xFF7B61FF),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            "Ingat Saya",
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF1E1E2C),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
                       SizedBox(
                         width: double.infinity,
                         height: 50,
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                const Color(0xFF7B61FF), // Warna ungu tombol
+                            backgroundColor: const Color(0xFF7B61FF),
                             foregroundColor: Colors.white,
                             elevation: 0,
                             shape: RoundedRectangleBorder(
@@ -206,7 +233,6 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Navigasi Daftar
                       Center(
                         child: TextButton(
                           onPressed: () {
@@ -223,37 +249,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                       const SizedBox(height: 16),
-
-                      // Kotak Info Demo Mode
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 12, horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFF9DB), // Kuning pudar
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: const Color(0xFFFFE066)), // Border kuning
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text("🏆", style: TextStyle(fontSize: 16)),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                "Demo Mode: Gunakan email dan password apa saja untuk masuk",
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    color: Color(0xFF8B5E34) // Teks kecoklatan
-                                    ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     ],
-                    // Slogan tersemat logo terlihat jelas.
                   ),
                 ),
               ],
