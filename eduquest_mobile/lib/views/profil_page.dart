@@ -33,10 +33,18 @@ class _ProfilPageState extends State<ProfilPage> {
   int _myQuestionsAnswered = 0; 
   int _myAnswersGiven = 0; 
   
-  // Variabel Persentase
+  // Variabel Persentase & Statistik Baru
   int _aiUsagePercentage = 0;
   int _forumUsagePercentage = 0;
   int _factCheckAccuracy = 0; 
+
+  int _totalQuestionLikes = 0; // 📍 Total like dari pertanyaan SAYA
+  int _totalAnswerLikes = 0;   // 📍 Total like dari jawaban SAYA
+  double _totalHoursUsage = 0.0; // 📍 Total jam pemakaian
+
+  // Variabel Kustomisasi Background Header
+  Color _headerColor = const Color(0xFF6B48FF);
+  File? _headerImageFile;
 
   @override
   void initState() {
@@ -61,21 +69,21 @@ class _ProfilPageState extends State<ProfilPage> {
         _imageFile = File(savedImage);
       }
 
-      // Simulasi akurasi fact checker (Meningkat seiring level, maks 98%)
       _factCheckAccuracy = _points == 0 ? 0 : (65 + (_level * 6)).clamp(0, 98);
     }
 
-    // 2. Hitung: Jumlah Pertanyaan yang SAYA buat
-    var qCountRes = await db.rawQuery('SELECT COUNT(*) as total FROM questions WHERE username = ?', [_currentUsername]);
+    // 2. Hitung: Jumlah Pertanyaan yang SAYA buat & Total Like Pertanyaan
+    var qCountRes = await db.rawQuery('SELECT COUNT(*) as total, SUM(likes) as totalLikes FROM questions WHERE username = ?', [_currentUsername]);
     int myQuestionsCount = (qCountRes.first['total'] as int?) ?? 0;
+    _totalQuestionLikes = (qCountRes.first['totalLikes'] as int?) ?? 0;
 
-    // Hitung: Total komentar/jawaban yang masuk ke pertanyaan SAYA
     var qRes = await db.rawQuery('SELECT SUM(comments) as total FROM questions WHERE username = ?', [_currentUsername]);
     _myQuestionsAnswered = (qRes.first['total'] as int?) ?? 0;
 
-    // 3. Hitung: Jawaban yang SAYA berikan di forum
-    var aRes = await db.rawQuery('SELECT COUNT(*) as total FROM answers WHERE username = ?', [_currentUsername]);
+    // 3. Hitung: Jawaban yang SAYA berikan di forum & Total Like Jawaban
+    var aRes = await db.rawQuery('SELECT COUNT(*) as total, SUM(likes) as totalLikes FROM answers WHERE username = ?', [_currentUsername]);
     _myAnswersGiven = (aRes.first['total'] as int?) ?? 0;
+    _totalAnswerLikes = (aRes.first['totalLikes'] as int?) ?? 0;
 
     // 4. Hitung: Total Interaksi AI milik saya
     var aiRes = await db.rawQuery('SELECT COUNT(*) as total FROM chats WHERE username = ?', [_currentUsername]);
@@ -83,7 +91,6 @@ class _ProfilPageState extends State<ProfilPage> {
 
     // --- LOGIKA PERHITUNGAN PERSENTASE PENGGUNAAN FITUR ---
     int totalAktivitas = myQuestionsCount + _myAnswersGiven + totalAiChats;
-    
     if (totalAktivitas > 0) {
       _aiUsagePercentage = ((totalAiChats / totalAktivitas) * 100).round();
       _forumUsagePercentage = (((myQuestionsCount + _myAnswersGiven) / totalAktivitas) * 100).round();
@@ -92,6 +99,26 @@ class _ProfilPageState extends State<ProfilPage> {
       _forumUsagePercentage = 0;
     }
 
+    // --- MEMUAT KUSTOMISASI HEADER & JAM PENGGUNAAN DARI MEMORI HP ---
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    
+    // Memuat warna header
+    int savedColor = prefs.getInt('header_color_$_currentUsername') ?? 0xFF6B48FF;
+    _headerColor = Color(savedColor);
+    
+    // Memuat gambar header
+    String? savedHeaderImage = prefs.getString('header_image_$_currentUsername');
+    if (savedHeaderImage != null && savedHeaderImage.isNotEmpty) {
+      _headerImageFile = File(savedHeaderImage);
+    }
+
+    // Menghitung & menyimpan simulasi Total Jam Penggunaan
+    double savedHours = prefs.getDouble('app_usage_hours_$_currentUsername') ?? 0.0;
+    // Logika estimasi: 1 streak = ~1.5 jam, setiap aktivitas = ~0.2 jam
+    _totalHoursUsage = savedHours == 0.0 ? ((_streak * 1.5) + (totalAktivitas * 0.2)) : savedHours;
+    _totalHoursUsage += 0.1; // Bertambah sedikit setiap kali profil dibuka
+    await prefs.setDouble('app_usage_hours_$_currentUsername', _totalHoursUsage);
+
     if (mounted) {
       setState(() {
         _isLoading = false;
@@ -99,36 +126,117 @@ class _ProfilPageState extends State<ProfilPage> {
     }
   }
 
+  // --- FUNGSI UBAH BACKGROUND HEADER (BARU) ---
+  void _tampilkanOpsiBackground() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Kustomisasi Latar Belakang", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              const Text("Pilih Warna", style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey)),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 12,
+                children: [
+                  _buildColorOption(const Color(0xFF6B48FF)),
+                  _buildColorOption(Colors.blueAccent),
+                  _buildColorOption(Colors.teal),
+                  _buildColorOption(Colors.pinkAccent),
+                  _buildColorOption(Colors.orangeAccent),
+                  _buildColorOption(Colors.black87),
+                ],
+              ),
+              const SizedBox(height: 24),
+              const Text("Gambar dari Galeri", style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey)),
+              const SizedBox(height: 10),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.image, color: _level >= 5 ? Colors.blue : Colors.grey),
+                title: Text("Pilih Gambar Latar", style: TextStyle(color: _level >= 5 ? Colors.black : Colors.grey)),
+                trailing: _level < 5 
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(color: Colors.red.shade100, borderRadius: BorderRadius.circular(8)),
+                        child: const Text("Syarat: Level 5", style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold)),
+                      )
+                    : const Icon(Icons.chevron_right),
+                onTap: () async {
+                  Navigator.pop(context);
+                  if (_level < 5) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Bermain lebih banyak untuk capai Level 5 dan buka fitur ini!"), backgroundColor: Colors.red));
+                    return;
+                  }
+                  
+                  final picked = await _picker.pickImage(source: ImageSource.gallery);
+                  if (picked != null) {
+                    SharedPreferences prefs = await SharedPreferences.getInstance();
+                    await prefs.setString('header_image_$_currentUsername', picked.path);
+                    setState(() {
+                      _headerImageFile = File(picked.path);
+                    });
+                  }
+                },
+              ),
+              if (_headerImageFile != null)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.delete, color: Colors.red),
+                  title: const Text("Hapus Gambar Latar", style: TextStyle(color: Colors.red)),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    SharedPreferences prefs = await SharedPreferences.getInstance();
+                    await prefs.remove('header_image_$_currentUsername');
+                    setState(() {
+                      _headerImageFile = null;
+                    });
+                  },
+                )
+            ],
+          ),
+        );
+      }
+    );
+  }
+
+  Widget _buildColorOption(Color color) {
+    bool isSelected = _headerColor.value == color.value && _headerImageFile == null;
+    return GestureDetector(
+      onTap: () async {
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('header_color_$_currentUsername', color.value);
+        await prefs.remove('header_image_$_currentUsername');
+        setState(() {
+          _headerColor = color;
+          _headerImageFile = null;
+        });
+        Navigator.pop(context);
+      },
+      child: CircleAvatar(
+        backgroundColor: color,
+        radius: 20,
+        child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 20) : null,
+      ),
+    );
+  }
+
   // --- FUNGSI AMBIL FOTO PROFIL ---
   Future<void> _pilihFotoProfil() async {
     try {
-      final XFile? pickedFile = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 80,
-      );
-
+      final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
       if (pickedFile != null) {
-        setState(() {
-          _imageFile = File(pickedFile.path);
-        });
-
+        setState(() { _imageFile = File(pickedFile.path); });
         await _dbHelper.updateUserProfileImage(_currentUsername, pickedFile.path);
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Foto profil berhasil diperbarui! ✨'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Foto profil berhasil diperbarui! ✨'), backgroundColor: Colors.green));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal mengambil gambar: $e'), backgroundColor: Colors.red),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal mengambil gambar: $e'), backgroundColor: Colors.red));
     }
   }
 
@@ -142,24 +250,16 @@ class _ProfilPageState extends State<ProfilPage> {
           title: const Text("Ubah Nama"),
           content: TextField(
             controller: _nameController,
-            decoration: const InputDecoration(
-              hintText: "Contoh: Budi Santoso",
-              focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF6B48FF))),
-            ),
+            decoration: const InputDecoration(hintText: "Contoh: Budi Santoso", focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF6B48FF)))),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Batal", style: TextStyle(color: Colors.grey)),
-            ),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal", style: TextStyle(color: Colors.grey))),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6B48FF)),
               onPressed: () async {
                 String newName = _nameController.text.trim();
-                
                 if (newName.isNotEmpty && newName != _currentUsername) {
                   final db = await _dbHelper.database;
-                  
                   try {
                     await db.transaction((txn) async {
                       await txn.update('users', {'username': newName}, where: 'username = ?', whereArgs: [_currentUsername]);
@@ -171,9 +271,7 @@ class _ProfilPageState extends State<ProfilPage> {
                     SharedPreferences prefs = await SharedPreferences.getInstance();
                     await prefs.setString('username', newName);
 
-                    setState(() {
-                      _currentUsername = newName;
-                    });
+                    setState(() { _currentUsername = newName; });
                     
                     if (context.mounted) {
                       Navigator.pop(context); 
@@ -181,9 +279,7 @@ class _ProfilPageState extends State<ProfilPage> {
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nama pengguna berhasil diubah!')));
                     }
                   } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nama ini mungkin sudah dipakai orang lain.'), backgroundColor: Colors.red));
-                    }
+                    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nama ini mungkin sudah dipakai orang lain.'), backgroundColor: Colors.red));
                   }
                 }
               },
@@ -213,9 +309,7 @@ class _ProfilPageState extends State<ProfilPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFF6B48FF))));
-    }
+    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFF6B48FF))));
 
     double progressValue = (_level >= 5) ? 1.0 : (_points % 50) / 50.0;
     int nextTarget = (_level >= 5) ? _points : (_level * 50);
@@ -225,25 +319,41 @@ class _ProfilPageState extends State<ProfilPage> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // --- HEADER UNGU ---
+            // --- HEADER DINAMIS (Warna / Gambar dari Galeri) ---
             Container(
               width: double.infinity,
               padding: const EdgeInsets.only(top: 50, bottom: 30, left: 24, right: 24),
-              decoration: const BoxDecoration(
-                color: Color(0xFF6B48FF),
-                borderRadius: BorderRadius.only(
+              decoration: BoxDecoration(
+                color: _headerImageFile == null ? _headerColor : null,
+                image: _headerImageFile != null 
+                    ? DecorationImage(
+                        image: FileImage(_headerImageFile!), 
+                        fit: BoxFit.cover, 
+                        // Efek gelap sedikit agar teks putih tetap terbaca jika pakai gambar galeri
+                        colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.4), BlendMode.darken)
+                      ) 
+                    : null,
+                borderRadius: const BorderRadius.only(
                   bottomLeft: Radius.circular(32),
                   bottomRight: Radius.circular(32),
                 ),
               ),
               child: Column(
                 children: [
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: IconButton(
-                      icon: const Icon(Icons.settings, color: Colors.white),
-                      onPressed: _bukaPengaturan,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Tombol Kustomisasi Background
+                      IconButton(
+                        icon: const Icon(Icons.color_lens, color: Colors.white),
+                        onPressed: _tampilkanOpsiBackground,
+                      ),
+                      // Tombol Pengaturan Umum
+                      IconButton(
+                        icon: const Icon(Icons.settings, color: Colors.white),
+                        onPressed: _bukaPengaturan,
+                      ),
+                    ],
                   ),
                   GestureDetector(
                     onTap: _pilihFotoProfil,
@@ -257,15 +367,13 @@ class _ProfilPageState extends State<ProfilPage> {
                             radius: 47,
                             backgroundColor: const Color(0xFFE0E0E0),
                             backgroundImage: _imageFile != null ? FileImage(_imageFile!) : null,
-                            child: _imageFile == null
-                                ? const Icon(Icons.person, size: 55, color: Colors.grey)
-                                : null,
+                            child: _imageFile == null ? const Icon(Icons.person, size: 55, color: Colors.grey) : null,
                           ),
                         ),
                         Container(
                           padding: const EdgeInsets.all(6),
                           decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                          child: const Icon(Icons.camera_alt, size: 16, color: Color(0xFF6B48FF)),
+                          child: Icon(Icons.camera_alt, size: 16, color: _headerColor),
                         ),
                       ],
                     ),
@@ -273,7 +381,7 @@ class _ProfilPageState extends State<ProfilPage> {
                   const SizedBox(height: 16),
                   Text(
                     _currentUsername,
-                    style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                    style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold, shadows: [Shadow(color: Colors.black26, blurRadius: 4)]),
                   ),
                   const SizedBox(height: 4),
                   Text(widget.user.email, style: const TextStyle(color: Colors.white70, fontSize: 14)),
@@ -319,7 +427,7 @@ class _ProfilPageState extends State<ProfilPage> {
                       value: progressValue,
                       minHeight: 8,
                       backgroundColor: const Color(0xFFE0E0E0),
-                      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF6B48FF)),
+                      valueColor: AlwaysStoppedAnimation<Color>(_headerColor), // Menyesuaikan warna tema
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -339,8 +447,7 @@ class _ProfilPageState extends State<ProfilPage> {
                   ),
                   const SizedBox(height: 24),
 
-                  const Text("Statistik Belajar",
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E1E2C))),
+                  const Text("Statistik Belajar", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E1E2C))),
                   const SizedBox(height: 12),
                   Container(
                     width: double.infinity,
@@ -352,6 +459,14 @@ class _ProfilPageState extends State<ProfilPage> {
                     ),
                     child: Column(
                       children: [
+                        // --- BARIS STATISTIK BARU ---
+                        _buildRowStatDetail(Icons.thumb_up_alt_outlined, "Like Diterima (Pertanyaan)", "$_totalQuestionLikes"),
+                        const Divider(height: 24, thickness: 0.5),
+                        _buildRowStatDetail(Icons.thumb_up_alt, "Like Diterima (Jawaban)", "$_totalAnswerLikes"),
+                        const Divider(height: 24, thickness: 0.5),
+                        _buildRowStatDetail(Icons.access_time_rounded, "Total Jam Penggunaan", "${_totalHoursUsage.toStringAsFixed(1)} Jam"),
+                        const Divider(height: 24, thickness: 0.5),
+                        // --- STATISTIK LAMA ---
                         _buildRowStatDetail(Icons.question_answer_rounded, "Pertanyaanmu Dijawab", "$_myQuestionsAnswered"),
                         const Divider(height: 24, thickness: 0.5),
                         _buildRowStatDetail(Icons.check_circle_outline, "Jawaban Diberikan", "$_myAnswersGiven"),
@@ -377,7 +492,7 @@ class _ProfilPageState extends State<ProfilPage> {
   Widget _buildRowStatDetail(IconData icon, String label, String value) {
     return Row(
       children: [
-        Icon(icon, color: const Color(0xFF6B48FF), size: 20),
+        Icon(icon, color: _headerColor, size: 20),
         const SizedBox(width: 12),
         Expanded(
           child: Text(label, style: const TextStyle(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.w500)),
@@ -391,11 +506,7 @@ class _ProfilPageState extends State<ProfilPage> {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade200),
-        ),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
         child: Column(
           children: [
             Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -427,7 +538,7 @@ class _ProfilPageState extends State<ProfilPage> {
 }
 
 // ======================================================================
-// HALAMAN PENGATURAN (SETTINGS PAGE) DENGAN DARK MODE
+// HALAMAN PENGATURAN (SETTINGS PAGE)
 // ======================================================================
 class PengaturanPage extends StatefulWidget {
   final VoidCallback onUbahNama;
@@ -448,7 +559,6 @@ class _PengaturanPageState extends State<PengaturanPage> {
     _loadTheme();
   }
 
-  // --- Fungsi untuk memuat status Dark Mode ---
   Future<void> _loadTheme() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -456,39 +566,24 @@ class _PengaturanPageState extends State<PengaturanPage> {
     });
   }
 
-  // --- Fungsi untuk menyimpan status Dark Mode ---
   Future<void> _toggleDarkMode(bool value) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setBool('is_dark_mode', value);
-    setState(() {
-      _isDarkMode = value;
-    });
-
+    setState(() { _isDarkMode = value; });
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(value ? 'Mode Gelap diaktifkan!' : 'Mode Terang diaktifkan!'),
-          backgroundColor: value ? Colors.black87 : Colors.green,
-          action: SnackBarAction(
-            label: 'Info',
-            textColor: Colors.white,
-            onPressed: () {},
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(value ? 'Mode Gelap diaktifkan!' : 'Mode Terang diaktifkan!'),
+        backgroundColor: value ? Colors.black87 : Colors.green,
+      ));
     }
   }
 
   Future<void> _bukaWebEduQuest(BuildContext context) async {
     final Uri url = Uri.parse('https://www.eduquest.com');
     try {
-      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-        throw Exception('Tidak bisa membuka URL');
-      }
+      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) throw Exception('Tidak bisa membuka URL');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Membuka web EduQuest...'), backgroundColor: Colors.blueAccent),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Membuka web EduQuest...'), backgroundColor: Colors.blueAccent));
     }
   }
 
@@ -497,27 +592,16 @@ class _PengaturanPageState extends State<PengaturanPage> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.person_off_rounded, color: Colors.red),
-              SizedBox(width: 8),
-              Text('Hapus Foto Profil?'),
-            ],
-          ),
+          title: const Row(children: [Icon(Icons.person_off_rounded, color: Colors.red), SizedBox(width: 8), Text('Hapus Foto Profil?')]),
           content: const Text('Apakah kamu yakin ingin menghapus foto profilmu saat ini?'),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Batal', style: TextStyle(color: Colors.grey)),
-            ),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal', style: TextStyle(color: Colors.grey))),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               onPressed: () {
                 widget.onHapusFoto();
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Foto profil berhasil dihapus.'), backgroundColor: Colors.orange),
-                );
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Foto profil berhasil dihapus.'), backgroundColor: Colors.orange));
               },
               child: const Text('Ya, Hapus', style: TextStyle(color: Colors.white)),
             ),
@@ -533,23 +617,14 @@ class _PengaturanPageState extends State<PengaturanPage> {
     await prefs.remove('username');
 
     if (context.mounted) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (context) => const RegisterPage()),
-        (route) => false,
-      );
+      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const RegisterPage()), (route) => false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Pengaturan", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text("Pengaturan", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)), backgroundColor: Colors.white, foregroundColor: Colors.black, elevation: 0),
       backgroundColor: const Color(0xFFF9FAFB),
       body: ListView(
         padding: const EdgeInsets.all(20),
@@ -560,36 +635,21 @@ class _PengaturanPageState extends State<PengaturanPage> {
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
             child: Column(
               children: [
-                ListTile(
-                  leading: const Icon(Icons.edit, color: Color(0xFF6B48FF)),
-                  title: const Text("Ubah Nama Pengguna"),
-                  trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-                  onTap: widget.onUbahNama,
-                ),
+                ListTile(leading: const Icon(Icons.edit, color: Color(0xFF6B48FF)), title: const Text("Ubah Nama Pengguna"), trailing: const Icon(Icons.chevron_right, color: Colors.grey), onTap: widget.onUbahNama),
                 const Divider(height: 1, indent: 16, endIndent: 16),
-                ListTile(
-                  leading: const Icon(Icons.no_photography_outlined, color: Colors.orange),
-                  title: const Text("Hapus Foto Profil"),
-                  trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-                  onTap: () => _tampilkanDialogHapusProfil(context),
-                ),
+                ListTile(leading: const Icon(Icons.no_photography_outlined, color: Colors.orange), title: const Text("Hapus Foto Profil"), trailing: const Icon(Icons.chevron_right, color: Colors.grey), onTap: () => _tampilkanDialogHapusProfil(context)),
               ],
             ),
           ),
           
           const SizedBox(height: 24),
-          
-          // --- BAGIAN BARU: TAMPILAN (DARK MODE) ---
           const Text("Tampilan", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
           const SizedBox(height: 12),
           Container(
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
             child: SwitchListTile(
               activeColor: const Color(0xFF6B48FF),
-              secondary: Icon(
-                _isDarkMode ? Icons.dark_mode : Icons.light_mode, 
-                color: _isDarkMode ? Colors.indigo : Colors.orange
-              ),
+              secondary: Icon(_isDarkMode ? Icons.dark_mode : Icons.light_mode, color: _isDarkMode ? Colors.indigo : Colors.orange),
               title: const Text("Mode Gelap (Dark Mode)"),
               value: _isDarkMode,
               onChanged: _toggleDarkMode,
@@ -615,11 +675,7 @@ class _PengaturanPageState extends State<PengaturanPage> {
             width: double.infinity,
             height: 50,
             child: OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(color: Colors.red.shade300, width: 1),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                foregroundColor: Colors.redAccent,
-              ),
+              style: OutlinedButton.styleFrom(side: BorderSide(color: Colors.red.shade300, width: 1), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), foregroundColor: Colors.redAccent),
               onPressed: () => _prosesLogout(context),
               icon: const Icon(Icons.logout, size: 18),
               label: const Text("Keluar dari Akun", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),

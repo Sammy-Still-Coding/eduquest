@@ -18,6 +18,10 @@ class _BuatPertanyaanPageState extends State<BuatPertanyaanPage> {
   final _descController = TextEditingController();
   final _tagsController = TextEditingController();
   
+  // 📍 Tambahan: Controller untuk kategori buatan sendiri
+  final _customCategoryController = TextEditingController();
+  bool _isCustomCategory = false; // State untuk memantau apakah "Lainnya" dipilih
+  
   String _selectedCategory = "Matematika";
   final List<String> _categories = ["Matematika", "Fisika", "Kimia", "Biologi", "Bahasa Inggris", "Lainnya"];
   
@@ -26,6 +30,15 @@ class _BuatPertanyaanPageState extends State<BuatPertanyaanPage> {
   bool _isLoading = false;
 
   final Color _primaryPurple = const Color(0xFF7B61FF);
+
+  @override
+  void dispose() {
+    _questionController.dispose();
+    _descController.dispose();
+    _tagsController.dispose();
+    _customCategoryController.dispose();
+    super.dispose();
+  }
 
   Future<void> _pickImage(ImageSource source) async {
     try {
@@ -46,6 +59,16 @@ class _BuatPertanyaanPageState extends State<BuatPertanyaanPage> {
       return;
     }
 
+    // 📍 Validasi: Pastikan kategori custom tidak kosong jika opsi "Lainnya" dipilih
+    String finalCategory = _selectedCategory;
+    if (_isCustomCategory) {
+      finalCategory = _customCategoryController.text.trim();
+      if (finalCategory.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Kategori pelajaran baru tidak boleh kosong!", style: TextStyle(color: Colors.white)), backgroundColor: Colors.redAccent));
+        return;
+      }
+    }
+
     setState(() => _isLoading = true);
 
     // Format tanggal hari ini (Contoh: 24/05/2026)
@@ -60,7 +83,7 @@ class _BuatPertanyaanPageState extends State<BuatPertanyaanPage> {
 
     Map<String, dynamic> questionData = {
       'username': widget.user.username,
-      'category': _selectedCategory,
+      'category': finalCategory, // 📍 Menggunakan finalCategory (bisa bawaan atau custom)
       'question': _questionController.text.trim(),
       'description': _descController.text.trim(),
       'tags': formattedTags.join(','), // Simpan sebagai string pisah koma
@@ -114,10 +137,32 @@ class _BuatPertanyaanPageState extends State<BuatPertanyaanPage> {
                   items: _categories.map((String value) {
                     return DropdownMenuItem<String>(value: value, child: Text(value, style: const TextStyle(fontWeight: FontWeight.w500)));
                   }).toList(),
-                  onChanged: (newValue) => setState(() => _selectedCategory = newValue!),
+                  onChanged: (newValue) {
+                    setState(() {
+                      _selectedCategory = newValue!;
+                      // 📍 Mengaktifkan isCustomCategory jika "Lainnya" dipilih
+                      _isCustomCategory = _selectedCategory == "Lainnya"; 
+                    });
+                  },
                 ),
               ),
             ),
+            
+            // 📍 Menampilkan kolom TextField extra HANYA jika "Lainnya" dipilih
+            if (_isCustomCategory) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _customCategoryController,
+                decoration: InputDecoration(
+                  hintText: "Ketik kategori baru (Misal: Sejarah, Coding, dll)",
+                  hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                  filled: true, fillColor: Colors.blue.shade50,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                  prefixIcon: const Icon(Icons.create, color: Colors.blue),
+                ),
+              ),
+            ],
+            
             const SizedBox(height: 20),
 
             // Judul Pertanyaan

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
 import 'ai_helper_page.dart';
 import 'ruang_belajar_page.dart';
@@ -23,46 +24,178 @@ class _DashboardPageState extends State<DashboardPage> {
   int _selectedIndex = 0;
   final Color _primaryPurple = const Color(0xFF7B61FF);
 
-  // State untuk Data User (Sync Real-time)
+  // State untuk Data User
   late UserModel currentUser;
 
-  // State untuk Forum
+  // State untuk Forum & Kategori Dinamis
   String _searchQuery = "";
   String _selectedCategory = "Semua";
+  List<String> _availableCategories = ["Semua"]; 
   final ImagePicker _picker = ImagePicker();
+
+  // 📍 Tambahan: Menyimpan status like di memori HP
+  SharedPreferences? _prefs;
 
   @override
   void initState() {
     super.initState();
     currentUser = widget.user;
+    _initPrefs(); // 📍 Panggil inisialisasi memori
+    _checkAndResetStreak(); 
     _refreshUserData();
   }
 
-  // Fungsi agar Poin, Level, dan Streak selalu sinkron dengan SQLite
+  // 📍 Tambahan: Inisialisasi SharedPreferences
+  Future<void> _initPrefs() async {
+    _prefs = await SharedPreferences.getInstance();
+    setState(() {});
+  }
+
+  // --- LOGIKA STREAK HARIAN (Reset jam 12 malam) ---
+  Future<void> _checkAndResetStreak() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? lastActiveStr = prefs.getString('last_active_date_${currentUser.username}');
+    
+    DateTime now = DateTime.now();
+    DateTime todayMidnight = DateTime(now.year, now.month, now.day); 
+
+    final db = await DbHelper().database;
+
+    if (lastActiveStr != null) {
+      DateTime lastActive = DateTime.parse(lastActiveStr);
+      DateTime lastActiveMidnight = DateTime(lastActive.year, lastActive.month, lastActive.day);
+
+      int difference = todayMidnight.difference(lastActiveMidnight).inDays;
+
+      if (difference == 1) {
+        // Login di hari berikutnya (Streak Bertambah)
+        int newStreak = currentUser.streakCount + 1;
+        await db.rawUpdate('UPDATE users SET streak_count = ? WHERE username = ?', [newStreak, currentUser.username]);
+      } else if (difference > 1) {
+        // Terlewat lebih dari 1 hari (Streak Reset ke 1)
+        await db.rawUpdate('UPDATE users SET streak_count = ? WHERE username = ?', [1, currentUser.username]);
+      }
+      // Jika difference == 0 (Hari yang sama), tidak terjadi apa-apa
+    } else {
+      // Login pertama kali
+      await db.rawUpdate('UPDATE users SET streak_count = ? WHERE username = ?', [1, currentUser.username]);
+    }
+    
+    // Simpan waktu aktif hari ini
+    await prefs.setString('last_active_date_${currentUser.username}', now.toIso8601String());
+  }
+
+  // --- SINKRONISASI DATA DAN KATEGORI ---
   Future<void> _refreshUserData() async {
     final dbHelper = DbHelper();
     final updatedUser = await dbHelper.getUserData(currentUser.username ?? '');
-    if (updatedUser != null && mounted) {
+    
+    // 📍 Mengambil hanya kategori yang benar-benar ada di tabel pertanyaan
+    final db = await dbHelper.database;
+    final List<Map<String, dynamic>> categoryRes = await db.rawQuery('SELECT DISTINCT category FROM questions');
+    
+    List<String> fetchedCategories = ["Semua"];
+    for (var row in categoryRes) {
+      if (row['category'] != null && row['category'].toString().trim().isNotEmpty) {
+        fetchedCategories.add(row['category'].toString());
+      }
+    }
+
+    if (mounted) {
       setState(() {
-        currentUser = updatedUser;
+        if (updatedUser != null) currentUser = updatedUser;
+        _availableCategories = fetchedCategories; 
+        
+        // Reset pilihan jika kategori yang sedang dipilih ternyata sudah tidak ada
+        if (!_availableCategories.contains(_selectedCategory)) {
+          _selectedCategory = "Semua";
+        }
       });
     }
+  }
+
+  // --- FUNGSI LIKE PERTANYAAN (Diperbaiki 1 Akun 1 Like) ---
+  Future<void> _likeQuestion(int questionId) async {
+    if (_prefs == null) return;
+
+    // Membuat kunci unik (misal: liked_q_5_Budi)
+    String likeKey = 'liked_q_${questionId}_${currentUser.username}';
+    bool isLiked = _prefs!.getBool(likeKey) ?? false;
+
+    final db = await DbHelper().database;
+
+    if (isLiked) {
+      // Batal Like (Unlike)
+      await db.rawUpdate('UPDATE questions SET likes = likes - 1 WHERE id = ?', [questionId]);
+      await _prefs!.setBool(likeKey, false);
+    } else {
+      // Beri Like
+      await db.rawUpdate('UPDATE questions SET likes = likes + 1 WHERE id = ?', [questionId]);
+      await _prefs!.setBool(likeKey, true);
+    }
+    
+    setState(() {}); // Refresh UI
   }
 
   void _onItemTapped(int index) async {
     setState(() {
       _selectedIndex = index;
     });
-
-    // 💡 SINKRONISASI AKTIF: Saat masuk ke Beranda (index 0) atau Profil (index 4), refresh data akun!
     if (index == 0 || index == 4) {
       await _refreshUserData();
     }
   }
 
+  // --- FUNGSI POP-UP NOTIFIKASI ---
+  void _showNotificationBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          height: 350,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Notifikasi", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+              Expanded(
+                child: ListView(
+                  children: [
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.amber.shade100,
+                        child: const Icon(Icons.auto_awesome, color: Colors.amber),
+                      ),
+                      title: const Text("Selamat datang di EduQuest!", style: TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: const Text("Mulai petualangan belajarmu, kumpulkan poin, dan tingkatkan level Pet kamu hari ini."),
+                    ),
+                    const Divider(),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.blue.shade100,
+                        child: const Icon(Icons.local_fire_department, color: Colors.blue),
+                      ),
+                      title: const Text("Streak Harian Aktif"),
+                      subtitle: const Text("Jangan lupa login setiap hari agar streak belajarmu tidak putus!"),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   // --- FUNGSI POP-UP BANTU JAWAB ---
-  void _showAnswerBottomSheet(
-      BuildContext context, Map<String, dynamic> question) {
+  void _showAnswerBottomSheet(BuildContext context, Map<String, dynamic> question) {
     final TextEditingController ansController = TextEditingController();
     XFile? ansImage;
 
@@ -75,9 +208,7 @@ class _DashboardPageState extends State<DashboardPage> {
           return StatefulBuilder(builder: (context, setSheetState) {
             return Padding(
               padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context)
-                    .viewInsets
-                    .bottom, // Agar tidak tertutup keyboard
+                bottom: MediaQuery.of(context).viewInsets.bottom, 
                 left: 24, right: 24, top: 24,
               ),
               child: Column(
@@ -85,8 +216,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text("Bantu Jawab ${question['username']}",
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold)),
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
                   TextField(
                     controller: ansController,
@@ -101,7 +231,6 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  // Preview Gambar di Pop-up
                   if (ansImage != null)
                     Stack(
                       children: [
@@ -164,30 +293,29 @@ class _DashboardPageState extends State<DashboardPage> {
                         if (ansController.text.trim().isEmpty &&
                             ansImage == null) return;
 
-                        // 1. Simpan Jawaban ke DB
                         await DbHelper().insertAnswer({
                           'question_id': question['id'],
                           'username': currentUser.username ?? '',
                           'content': ansController.text.trim(),
                           'image_path': ansImage?.path ?? '',
-                          'created_at': DateFormat('dd/MM/yyyy HH:mm')
-                              .format(DateTime.now()),
+                          'created_at': DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now()),
+                          'likes': 0 // Set default likes
                         });
 
-                        // 2. Tambah 10 Poin Pet (✨ Diperbaiki dengan Null-Safety)
-                        await DbHelper()
-                            .addPoints(currentUser.username ?? '', 10);
-                        await _refreshUserData(); // Refresh poin di header
+                        // 📍 Otomatis menambah angka komentar di database pertanyaan
+                        final db = await DbHelper().database;
+                        await db.rawUpdate('UPDATE questions SET comments = comments + 1 WHERE id = ?', [question['id']]);
+
+                        await DbHelper().addPoints(currentUser.username ?? '', 10);
+                        await _refreshUserData(); 
 
                         if (!context.mounted) return;
-                        Navigator.pop(context); // Tutup Pop-up
+                        Navigator.pop(context); 
                         ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                                content:
-                                    Text("Jawaban terkirim! +10 Poin Pet 🌟"),
+                                content: Text("Jawaban terkirim! +10 Poin Pet 🌟"),
                                 backgroundColor: Colors.green));
-                        setState(
-                            () {}); // Refresh list beranda agar angka komen naik
+                        setState(() {}); 
                       },
                       child: const Text("Kirim Jawaban",
                           style: TextStyle(fontWeight: FontWeight.bold)),
@@ -203,7 +331,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    // 💡 DATA REAL-TIME: Di-update otomatis ke setiap sub-halaman menggunakan state `currentUser`
     final List<Widget> pages = [
       _buildHomeContent(),
       AiHelperPage(user: currentUser),
@@ -224,10 +351,10 @@ class _DashboardPageState extends State<DashboardPage> {
                 final result = await Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) =>
-                          BuatPertanyaanPage(user: currentUser)),
+                      builder: (context) => BuatPertanyaanPage(user: currentUser)),
                 );
                 if (result == true) {
+                  await _refreshUserData();
                   setState(() {});
                 }
               },
@@ -324,12 +451,7 @@ class _DashboardPageState extends State<DashboardPage> {
                             child: IconButton(
                               icon: const Icon(Icons.notifications_none,
                                   color: Colors.white),
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                        content: Text(
-                                            "Belum ada notifikasi baru.")));
-                              },
+                              onPressed: _showNotificationBottomSheet, 
                             ),
                           )
                         ],
@@ -395,27 +517,23 @@ class _DashboardPageState extends State<DashboardPage> {
               ],
             ),
             const SizedBox(height: 45),
+            
             SizedBox(
               height: 40,
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                children: [
-                  _buildCategoryChip("Semua"),
-                  _buildCategoryChip("Matematika"),
-                  _buildCategoryChip("Fisika"),
-                  _buildCategoryChip("Kimia"),
-                  _buildCategoryChip("Biologi"),
-                  _buildCategoryChip("Lainnya"),
-                ],
+                children: _availableCategories.map((kategori) {
+                  return _buildCategoryChip(kategori);
+                }).toList(),
               ),
             ),
+            
             const SizedBox(height: 20),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: FutureBuilder<List<Map<String, dynamic>>>(
-                future:
-                    DbHelper().getQuestions(_searchQuery, _selectedCategory),
+                future: DbHelper().getQuestions(_searchQuery, _selectedCategory),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
@@ -430,7 +548,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                 size: 64, color: Colors.grey.shade300),
                             const SizedBox(height: 16),
                             Text(
-                                "Belum ada pertanyaan.\nJadilah yang pertama bertanya!",
+                                "Belum ada pertanyaan di kategori ini.\nJadilah yang pertama bertanya!",
                                 textAlign: TextAlign.center,
                                 style: TextStyle(color: Colors.grey.shade500)),
                           ],
@@ -517,6 +635,10 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Widget _buildQuestionCard({required Map<String, dynamic> questionData}) {
     List<String> tags = (questionData['tags'] as String).split(',');
+    int questionId = questionData['id'];
+
+    // 📍 Cek apakah user sudah melike ini
+    bool isLiked = _prefs?.getBool('liked_q_${questionId}_${currentUser.username}') ?? false;
 
     return GestureDetector(
       onTap: () async {
@@ -526,7 +648,7 @@ class _DashboardPageState extends State<DashboardPage> {
               builder: (context) => DetailPertanyaanPage(
                   question: questionData, user: currentUser)),
         );
-        setState(() {});
+        setState(() {}); // Refresh setelah kembali untuk update jumlah like/komen
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
@@ -621,11 +743,22 @@ class _DashboardPageState extends State<DashboardPage> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.thumb_up_outlined,
-                        size: 18, color: Colors.grey.shade600),
-                    const SizedBox(width: 4),
-                    Text("${questionData['likes']}",
-                        style: TextStyle(color: Colors.grey.shade600)),
+                    // 📍 TOMBOL LIKE DENGAN WARNA DINAMIS
+                    InkWell(
+                      onTap: () => _likeQuestion(questionId),
+                      child: Row(
+                        children: [
+                          Icon(isLiked ? Icons.thumb_up : Icons.thumb_up_outlined, 
+                              size: 18, 
+                              color: isLiked ? Colors.blueAccent : Colors.grey.shade600),
+                          const SizedBox(width: 4),
+                          Text("${questionData['likes']}", 
+                              style: TextStyle(
+                                  color: isLiked ? Colors.blueAccent : Colors.grey.shade600, 
+                                  fontWeight: isLiked ? FontWeight.bold : FontWeight.normal)),
+                        ],
+                      ),
+                    ),
                     const SizedBox(width: 16),
                     Icon(Icons.chat_bubble_outline,
                         size: 18, color: Colors.grey.shade600),

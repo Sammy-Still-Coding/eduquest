@@ -1,11 +1,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import '../core/db_helper.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
+import '../core/db_helper.dart';
 
 class DetailPertanyaanPage extends StatefulWidget {
   final Map<String, dynamic> question;
   final UserModel user;
+
   const DetailPertanyaanPage({super.key, required this.question, required this.user});
 
   @override
@@ -14,148 +16,195 @@ class DetailPertanyaanPage extends StatefulWidget {
 
 class _DetailPertanyaanPageState extends State<DetailPertanyaanPage> {
   final Color _primaryPurple = const Color(0xFF7B61FF);
+  List<Map<String, dynamic>> _answers = [];
+  bool _isLoading = true;
+  SharedPreferences? _prefs;
 
-  // Fungsi pura-pura untuk LIKE komentar (agar interaktif)
-  void _likeAnswer(int index) {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Menyukai jawaban ini! ❤️")));
+  @override
+  void initState() {
+    super.initState();
+    _initPrefsAndLoadAnswers();
+  }
+
+  Future<void> _initPrefsAndLoadAnswers() async {
+    _prefs = await SharedPreferences.getInstance();
+    await _loadAnswers();
+  }
+
+  // 📍 MENGAMBIL DATA JAWABAN: Diurutkan berdasarkan Like Terbanyak!
+  Future<void> _loadAnswers() async {
+    final db = await DbHelper().database;
+    final int qId = widget.question['id'];
+    
+    // Instruksi ORDER BY likes DESC memastikan jawaban dengan like terbanyak ada di atas
+    final List<Map<String, dynamic>> result = await db.rawQuery(
+      'SELECT * FROM answers WHERE question_id = ? ORDER BY likes DESC, id ASC',
+      [qId]
+    );
+
+    if (mounted) {
+      setState(() {
+        _answers = result;
+        _isLoading = false;
+      });
+    }
+  }
+
+  // 📍 FUNGSI LIKE UNTUK JAWABAN (1 Akun 1 Like)
+  Future<void> _toggleLikeAnswer(int answerId) async {
+    if (_prefs == null) return;
+    
+    String likeKey = 'liked_a_${answerId}_${widget.user.username}';
+    bool isLiked = _prefs!.getBool(likeKey) ?? false;
+    
+    final db = await DbHelper().database;
+
+    if (isLiked) {
+      await db.rawUpdate('UPDATE answers SET likes = likes - 1 WHERE id = ?', [answerId]);
+      await _prefs!.setBool(likeKey, false);
+    } else {
+      await db.rawUpdate('UPDATE answers SET likes = likes + 1 WHERE id = ?', [answerId]);
+      await _prefs!.setBool(likeKey, true);
+    }
+    
+    await _loadAnswers(); // Load ulang agar posisi otomatis terurut ulang jika like berubah
   }
 
   @override
   Widget build(BuildContext context) {
-    List<String> tags = (widget.question['tags'] as String).split(',');
-
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
+        title: const Text("Detail Diskusi", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
-        elevation: 0.5,
-        title: const Text("Detail Diskusi", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        actions: [
-          IconButton(icon: const Icon(Icons.share_outlined), onPressed: () {}),
-        ],
+        elevation: 0,
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
               padding: const EdgeInsets.all(20),
               children: [
-                // 1. HEADER PERTANYAAN
-                Row(
-                  children: [
-                    CircleAvatar(backgroundColor: _primaryPurple, radius: 20, child: Text(widget.question['username'][0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(widget.question['username'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        Text(widget.question['created_at'], style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
-                      ],
-                    ),
-                    const Spacer(),
-                    Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: _primaryPurple.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: Text(widget.question['category'], style: TextStyle(color: _primaryPurple, fontSize: 11, fontWeight: FontWeight.bold)))
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Text(widget.question['question'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
-                const SizedBox(height: 12),
-                Text(widget.question['description'], style: const TextStyle(fontSize: 15, height: 1.5)),
-                const SizedBox(height: 16),
-                
-                // Gambar Soal Jika Ada
-                if (widget.question['image_path'] != null && widget.question['image_path'].toString().isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.file(File(widget.question['image_path']))),
+                // KARTU PERTANYAAN INTI
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
                   ),
-
-                Wrap(spacing: 8, children: tags.map((tag) => Text(tag, style: TextStyle(color: Colors.blue.shade700, fontSize: 13, fontWeight: FontWeight.w500))).toList()),
-                
-                const Padding(padding: EdgeInsets.symmetric(vertical: 20), child: Divider(thickness: 1)),
-                
-                // 2. BAGIAN KOMENTAR / JAWABAN
-                Row(
-                  children: [
-                    const Icon(Icons.chat_bubble_outline, size: 20),
-                    const SizedBox(width: 8),
-                    Text("${widget.question['comments']} Jawaban", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                FutureBuilder<List<Map<String, dynamic>>>(
-                  future: DbHelper().getAnswers(widget.question['id']),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-                    if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                      return Center(child: Padding(padding: const EdgeInsets.all(40.0), child: Text("Belum ada yang menjawab.", style: TextStyle(color: Colors.grey.shade400))));
-                    }
-
-                    return Column(
-                      children: snapshot.data!.map((ans) {
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 20),
-                          child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          CircleAvatar(backgroundColor: _primaryPurple, radius: 20, child: Text(widget.question['username'][0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                          const SizedBox(width: 12),
+                          Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              CircleAvatar(backgroundColor: Colors.blueGrey, radius: 16, child: Text(ans['username'][0].toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 12))),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(16),
-                                      decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(16).copyWith(topLeft: const Radius.circular(0))),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Text(ans['username'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                              Text(ans['created_at'].toString().split(' ')[0], style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 8),
-                                          if (ans['content'].isNotEmpty) Text(ans['content'], style: const TextStyle(fontSize: 14, height: 1.4)),
-                                          if (ans['image_path'].isNotEmpty) 
-                                            Padding(padding: const EdgeInsets.only(top: 12), child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(File(ans['image_path']), height: 150, width: double.infinity, fit: BoxFit.cover))),
-                                        ],
-                                      ),
-                                    ),
-                                    // Tombol Like Komentar (Tiktok Style)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 4, left: 8),
-                                      child: GestureDetector(
-                                        onTap: () => _likeAnswer(ans['id']),
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.favorite_border, size: 16, color: Colors.grey.shade600),
-                                            const SizedBox(width: 4),
-                                            Text("Suka (${ans['likes']})", style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.w500)),
-                                            const SizedBox(width: 16),
-                                            Text("Balas", style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.w500))
-                                          ],
-                                        ),
-                                      ),
-                                    )
-                                  ],
-                                ),
-                              )
+                              Text(widget.question['username'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                              Text(widget.question['created_at'].toString(), style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
                             ],
                           ),
-                        );
-                      }).toList(),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(widget.question['question'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                      const SizedBox(height: 12),
+                      Text(widget.question['description'], style: const TextStyle(fontSize: 14, height: 1.5, color: Colors.black87)),
+                      
+                      if (widget.question['image_path'] != null && widget.question['image_path'].toString().isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.file(File(widget.question['image_path']), width: double.infinity, fit: BoxFit.cover),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 24),
+                
+                // HEADER JAWABAN
+                Row(
+                  children: [
+                    const Icon(Icons.forum, color: Colors.blueAccent),
+                    const SizedBox(width: 8),
+                    Text("${_answers.length} Jawaban", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                
+                // LIST JAWABAN (Sudah diurutkan secara otomatis dari DB)
+                if (_answers.isEmpty)
+                  Center(child: Padding(padding: const EdgeInsets.all(20), child: Text("Belum ada jawaban. Jadilah yang pertama membantu!", style: TextStyle(color: Colors.grey.shade500))))
+                else
+                  ..._answers.map((answer) {
+                    bool isAnswerLiked = _prefs?.getBool('liked_a_${answer['id']}_${widget.user.username}') ?? false;
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  CircleAvatar(backgroundColor: Colors.grey.shade300, radius: 14, child: const Icon(Icons.person, size: 16, color: Colors.white)),
+                                  const SizedBox(width: 8),
+                                  Text(answer['username'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                ],
+                              ),
+                              Text(answer['created_at'].toString().split(' ')[0], style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Text(answer['content'], style: const TextStyle(fontSize: 14, height: 1.4)),
+                          
+                          if (answer['image_path'] != null && answer['image_path'].toString().isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.file(File(answer['image_path']), height: 150, width: double.infinity, fit: BoxFit.cover)),
+                            ),
+
+                          const SizedBox(height: 12),
+                          const Divider(),
+                          
+                          // 📍 TOMBOL LIKE JAWABAN
+                          InkWell(
+                            onTap: () => _toggleLikeAnswer(answer['id']),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(isAnswerLiked ? Icons.thumb_up : Icons.thumb_up_outlined, size: 18, color: isAnswerLiked ? Colors.blueAccent : Colors.grey.shade500),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    "Membantu (${answer['likes']})", 
+                                    style: TextStyle(color: isAnswerLiked ? Colors.blueAccent : Colors.grey.shade600, fontWeight: isAnswerLiked ? FontWeight.bold : FontWeight.normal, fontSize: 13)
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        ],
+                      ),
                     );
-                  },
-                )
+                  }),
               ],
             ),
-          ),
-        ],
-      ),
     );
   }
 }
