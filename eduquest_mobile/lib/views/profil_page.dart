@@ -38,9 +38,13 @@ class _ProfilPageState extends State<ProfilPage> {
   int _forumUsagePercentage = 0;
   int _factCheckAccuracy = 0; 
 
-  int _totalQuestionLikes = 0; // 📍 Total like dari pertanyaan SAYA
-  int _totalAnswerLikes = 0;   // 📍 Total like dari jawaban SAYA
-  double _totalHoursUsage = 0.0; // 📍 Total jam pemakaian
+  int _totalQuestionLikes = 0; 
+  int _totalAnswerLikes = 0;   
+  double _totalHoursUsage = 0.0; 
+
+  // 📍 Variabel Sosial (Followers & Following)
+  int _followersCount = 0;
+  int _followingCount = 0;
 
   // Variabel Kustomisasi Background Header
   Color _headerColor = const Color(0xFF6B48FF);
@@ -89,6 +93,10 @@ class _ProfilPageState extends State<ProfilPage> {
     var aiRes = await db.rawQuery('SELECT COUNT(*) as total FROM chats WHERE username = ?', [_currentUsername]);
     int totalAiChats = (aiRes.first['total'] as int?) ?? 0;
 
+    // 5. 📍 Hitung Followers & Following
+    _followersCount = await _dbHelper.getFollowersCount(_currentUsername);
+    _followingCount = await _dbHelper.getFollowingCount(_currentUsername);
+
     // --- LOGIKA PERHITUNGAN PERSENTASE PENGGUNAAN FITUR ---
     int totalAktivitas = myQuestionsCount + _myAnswersGiven + totalAiChats;
     if (totalAktivitas > 0) {
@@ -114,7 +122,6 @@ class _ProfilPageState extends State<ProfilPage> {
 
     // Menghitung & menyimpan simulasi Total Jam Penggunaan
     double savedHours = prefs.getDouble('app_usage_hours_$_currentUsername') ?? 0.0;
-    // Logika estimasi: 1 streak = ~1.5 jam, setiap aktivitas = ~0.2 jam
     _totalHoursUsage = savedHours == 0.0 ? ((_streak * 1.5) + (totalAktivitas * 0.2)) : savedHours;
     _totalHoursUsage += 0.1; // Bertambah sedikit setiap kali profil dibuka
     await prefs.setDouble('app_usage_hours_$_currentUsername', _totalHoursUsage);
@@ -126,7 +133,7 @@ class _ProfilPageState extends State<ProfilPage> {
     }
   }
 
-  // --- FUNGSI UBAH BACKGROUND HEADER (BARU) ---
+  // --- FUNGSI UBAH BACKGROUND HEADER ---
   void _tampilkanOpsiBackground() {
     showModalBottomSheet(
       context: context,
@@ -329,7 +336,6 @@ class _ProfilPageState extends State<ProfilPage> {
                     ? DecorationImage(
                         image: FileImage(_headerImageFile!), 
                         fit: BoxFit.cover, 
-                        // Efek gelap sedikit agar teks putih tetap terbaca jika pakai gambar galeri
                         colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.4), BlendMode.darken)
                       ) 
                     : null,
@@ -386,10 +392,25 @@ class _ProfilPageState extends State<ProfilPage> {
                   const SizedBox(height: 4),
                   Text(widget.user.email, style: const TextStyle(color: Colors.white70, fontSize: 14)),
                   const SizedBox(height: 12),
+                  
+                  // 📍 LEVEL BADGE
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                     decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
                     child: Text("Level $_level Pet Owner", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14)),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 📍 INFO FOLLOWERS & FOLLOWING
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text("$_followersCount Pengikut", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      const SizedBox(width: 16),
+                      const Text("•", style: TextStyle(color: Colors.white70)),
+                      const SizedBox(width: 16),
+                      Text("$_followingCount Mengikuti", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ],
                   ),
                 ],
               ),
@@ -459,15 +480,13 @@ class _ProfilPageState extends State<ProfilPage> {
                     ),
                     child: Column(
                       children: [
-                        // --- BARIS STATISTIK BARU ---
                         _buildRowStatDetail(Icons.thumb_up_alt_outlined, "Like Diterima (Pertanyaan)", "$_totalQuestionLikes"),
                         const Divider(height: 24, thickness: 0.5),
                         _buildRowStatDetail(Icons.thumb_up_alt, "Like Diterima (Jawaban)", "$_totalAnswerLikes"),
                         const Divider(height: 24, thickness: 0.5),
                         _buildRowStatDetail(Icons.access_time_rounded, "Total Jam Penggunaan", "${_totalHoursUsage.toStringAsFixed(1)} Jam"),
                         const Divider(height: 24, thickness: 0.5),
-                        // --- STATISTIK LAMA ---
-                        _buildRowStatDetail(Icons.question_answer_rounded, "Pertanyaanmu Dijawab", "$_myQuestionsAnswered"),
+                        _buildRowStatDetail(Icons.question_answer_rounded, "Pertanyaan Dijawab", "$_myQuestionsAnswered"),
                         const Divider(height: 24, thickness: 0.5),
                         _buildRowStatDetail(Icons.check_circle_outline, "Jawaban Diberikan", "$_myAnswersGiven"),
                         const Divider(height: 24, thickness: 0.5),

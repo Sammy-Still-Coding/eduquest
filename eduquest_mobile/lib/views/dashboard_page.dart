@@ -11,6 +11,7 @@ import 'pet_ku_page.dart';
 import 'buat_pertanyaan_page.dart';
 import 'detail_pertanyaan_page.dart';
 import 'profil_page.dart';
+import 'public_profile_page.dart'; // 📍 Import Halaman Profil Publik
 
 class DashboardPage extends StatefulWidget {
   final UserModel user;
@@ -33,19 +34,19 @@ class _DashboardPageState extends State<DashboardPage> {
   List<String> _availableCategories = ["Semua"]; 
   final ImagePicker _picker = ImagePicker();
 
-  // 📍 Tambahan: Menyimpan status like di memori HP
+  // 📍 Menyimpan status like di memori HP
   SharedPreferences? _prefs;
 
   @override
   void initState() {
     super.initState();
     currentUser = widget.user;
-    _initPrefs(); // 📍 Panggil inisialisasi memori
+    _initPrefs(); 
     _checkAndResetStreak(); 
     _refreshUserData();
   }
 
-  // 📍 Tambahan: Inisialisasi SharedPreferences
+  // 📍 Inisialisasi SharedPreferences
   Future<void> _initPrefs() async {
     _prefs = await SharedPreferences.getInstance();
     setState(() {});
@@ -302,7 +303,6 @@ class _DashboardPageState extends State<DashboardPage> {
                           'likes': 0 // Set default likes
                         });
 
-                        // 📍 Otomatis menambah angka komentar di database pertanyaan
                         final db = await DbHelper().database;
                         await db.rawUpdate('UPDATE questions SET comments = comments + 1 WHERE id = ?', [question['id']]);
 
@@ -503,7 +503,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         });
                       },
                       decoration: InputDecoration(
-                        hintText: "Cari pertanyaan atau topik...",
+                        hintText: "Cari pertanyaan atau akun orang...",
                         hintStyle: TextStyle(color: Colors.grey.shade400),
                         prefixIcon:
                             Icon(Icons.search, color: Colors.grey.shade400),
@@ -518,6 +518,58 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
             const SizedBox(height: 45),
             
+            // 📍 HASIL PENCARIAN AKUN (DITAMBAHKAN DI SINI)
+            if (_searchQuery.isNotEmpty)
+              FutureBuilder<List<Map<String, dynamic>>>(
+                future: DbHelper().searchUsers(_searchQuery),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox.shrink();
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                        child: Text("Hasil Pencarian Akun", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                      ),
+                      SizedBox(
+                        height: 90,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: snapshot.data!.length,
+                          itemBuilder: (context, index) {
+                            var userResult = snapshot.data![index];
+                            String userImg = userResult['profile_image'] ?? '';
+                            return GestureDetector(
+                              onTap: () {
+                                Navigator.push(context, MaterialPageRoute(builder: (context) => PublicProfilePage(targetUser: userResult, currentUser: currentUser)));
+                              },
+                              child: Container(
+                                width: 80,
+                                margin: const EdgeInsets.only(right: 12),
+                                child: Column(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 28,
+                                      backgroundColor: _primaryPurple,
+                                      backgroundImage: userImg.isNotEmpty ? FileImage(File(userImg)) : null,
+                                      child: userImg.isEmpty ? Text(userResult['username'][0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)) : null,
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(userResult['username'], maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                  );
+                },
+              ),
+
             SizedBox(
               height: 40,
               child: ListView(
@@ -640,152 +692,177 @@ class _DashboardPageState extends State<DashboardPage> {
     // 📍 Cek apakah user sudah melike ini
     bool isLiked = _prefs?.getBool('liked_q_${questionId}_${currentUser.username}') ?? false;
 
-    return GestureDetector(
-      onTap: () async {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (context) => DetailPertanyaanPage(
-                  question: questionData, user: currentUser)),
-        );
-        setState(() {}); // Refresh setelah kembali untuk update jumlah like/komen
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
-                blurRadius: 10,
-                offset: const Offset(0, 4))
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    CircleAvatar(
-                        backgroundColor: _primaryPurple,
-                        radius: 18,
-                        child: Text(questionData['username'][0].toUpperCase(),
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold))),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(questionData['username'],
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 14)),
-                        Row(
-                          children: [
-                            Icon(Icons.access_time,
-                                size: 12, color: Colors.grey.shade500),
-                            const SizedBox(width: 4),
-                            Text(
-                                questionData['created_at']
-                                    .toString()
-                                    .split(' ')[0],
-                                style: TextStyle(
-                                    color: Colors.grey.shade500, fontSize: 11)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                      color: _primaryPurple.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10)),
-                  child: Text(questionData['category'],
-                      style: TextStyle(
-                          color: _primaryPurple,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold)),
-                )
+    // 📍 MENGGUNAKAN FUTURE BUILDER UNTUK MENGAMBIL FOTO PROFIL TERBARU
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: DbHelper().database.then((db) => db.query('users', where: 'username = ?', whereArgs: [questionData['username']])),
+      builder: (context, userSnapshot) {
+        String profileImgPath = '';
+        Map<String, dynamic>? authorData;
+
+        if (userSnapshot.hasData && userSnapshot.data!.isNotEmpty) {
+          authorData = userSnapshot.data!.first;
+          profileImgPath = authorData['profile_image'] ?? '';
+        }
+
+        return GestureDetector(
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (context) => DetailPertanyaanPage(
+                      question: questionData, user: currentUser)),
+            );
+            setState(() {}); // Refresh setelah kembali untuk update jumlah like/komen
+          },
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4))
               ],
             ),
-            const SizedBox(height: 16),
-            Text(questionData['question'],
-                style:
-                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 6),
-            Text(questionData['description'],
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    color: Colors.grey.shade600, fontSize: 13, height: 1.4)),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              children: tags
-                  .map((tag) => Text(tag,
-                      style: TextStyle(
-                          color: Colors.grey.shade500,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500)))
-                  .toList(),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // 📍 TOMBOL LIKE DENGAN WARNA DINAMIS
-                    InkWell(
-                      onTap: () => _likeQuestion(questionId),
+                    // 📍 Avatar & Nama yang bisa di-klik untuk membuka Profil
+                    GestureDetector(
+                      onTap: () {
+                        if (authorData != null) {
+                          Navigator.push(context, MaterialPageRoute(builder: (context) => PublicProfilePage(targetUser: authorData!, currentUser: currentUser)));
+                        }
+                      },
                       child: Row(
                         children: [
-                          Icon(isLiked ? Icons.thumb_up : Icons.thumb_up_outlined, 
-                              size: 18, 
-                              color: isLiked ? Colors.blueAccent : Colors.grey.shade600),
-                          const SizedBox(width: 4),
-                          Text("${questionData['likes']}", 
-                              style: TextStyle(
-                                  color: isLiked ? Colors.blueAccent : Colors.grey.shade600, 
-                                  fontWeight: isLiked ? FontWeight.bold : FontWeight.normal)),
+                          CircleAvatar(
+                              backgroundColor: _primaryPurple,
+                              radius: 18,
+                              backgroundImage: profileImgPath.isNotEmpty ? FileImage(File(profileImgPath)) : null,
+                              child: profileImgPath.isEmpty
+                                  ? Text(questionData['username'][0].toUpperCase(),
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold))
+                                  : null),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(questionData['username'],
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold, fontSize: 14)),
+                              Row(
+                                children: [
+                                  Icon(Icons.access_time,
+                                      size: 12, color: Colors.grey.shade500),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                      questionData['created_at']
+                                          .toString()
+                                          .split(' ')[0],
+                                      style: TextStyle(
+                                          color: Colors.grey.shade500, fontSize: 11)),
+                                ],
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    Icon(Icons.chat_bubble_outline,
-                        size: 18, color: Colors.grey.shade600),
-                    const SizedBox(width: 4),
-                    Text("${questionData['comments']}",
-                        style: TextStyle(color: Colors.grey.shade600)),
+                    Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                          color: _primaryPurple.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10)),
+                      child: Text(questionData['category'],
+                          style: TextStyle(
+                              color: _primaryPurple,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold)),
+                    )
                   ],
                 ),
-                ElevatedButton(
-                  onPressed: () =>
-                      _showAnswerBottomSheet(context, questionData),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: _primaryPurple,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20)),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 8),
-                      elevation: 0),
-                  child: const Text("Bantu Jawab",
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+                Text(questionData['question'],
+                    style:
+                        const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 6),
+                Text(questionData['description'],
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: Colors.grey.shade600, fontSize: 13, height: 1.4)),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  children: tags
+                      .map((tag) => Text(tag,
+                          style: TextStyle(
+                              color: Colors.grey.shade500,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500)))
+                      .toList(),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        // 📍 TOMBOL LIKE DENGAN WARNA DINAMIS
+                        InkWell(
+                          onTap: () => _likeQuestion(questionId),
+                          child: Row(
+                            children: [
+                              Icon(isLiked ? Icons.thumb_up : Icons.thumb_up_outlined, 
+                                  size: 18, 
+                                  color: isLiked ? Colors.blueAccent : Colors.grey.shade600),
+                              const SizedBox(width: 4),
+                              Text("${questionData['likes']}", 
+                                  style: TextStyle(
+                                      color: isLiked ? Colors.blueAccent : Colors.grey.shade600, 
+                                      fontWeight: isLiked ? FontWeight.bold : FontWeight.normal)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Icon(Icons.chat_bubble_outline,
+                            size: 18, color: Colors.grey.shade600),
+                        const SizedBox(width: 4),
+                        Text("${questionData['comments']}",
+                            style: TextStyle(color: Colors.grey.shade600)),
+                      ],
+                    ),
+                    ElevatedButton(
+                      onPressed: () =>
+                          _showAnswerBottomSheet(context, questionData),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: _primaryPurple,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 8),
+                          elevation: 0),
+                      child: const Text("Bantu Jawab",
+                          style: TextStyle(fontWeight: FontWeight.bold)),
+                    )
+                  ],
                 )
               ],
-            )
-          ],
-        ),
-      ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
