@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/db_helper.dart';
 import '../models/user_model.dart';
 import 'register_page.dart';
+import 'detail_pertanyaan_page.dart'; // 📍 Import Halaman Detail
 
 class ProfilPage extends StatefulWidget {
   final UserModel user;
@@ -41,10 +42,6 @@ class _ProfilPageState extends State<ProfilPage> {
   int _totalQuestionLikes = 0; 
   int _totalAnswerLikes = 0;   
   double _totalHoursUsage = 0.0; 
-
-  // 📍 Variabel Sosial (Followers & Following)
-  int _followersCount = 0;
-  int _followingCount = 0;
 
   // Variabel Kustomisasi Background Header
   Color _headerColor = const Color(0xFF6B48FF);
@@ -92,10 +89,6 @@ class _ProfilPageState extends State<ProfilPage> {
     // 4. Hitung: Total Interaksi AI milik saya
     var aiRes = await db.rawQuery('SELECT COUNT(*) as total FROM chats WHERE username = ?', [_currentUsername]);
     int totalAiChats = (aiRes.first['total'] as int?) ?? 0;
-
-    // 5. 📍 Hitung Followers & Following
-    _followersCount = await _dbHelper.getFollowersCount(_currentUsername);
-    _followingCount = await _dbHelper.getFollowingCount(_currentUsername);
 
     // --- LOGIKA PERHITUNGAN PERSENTASE PENGGUNAAN FITUR ---
     int totalAktivitas = myQuestionsCount + _myAnswersGiven + totalAiChats;
@@ -326,7 +319,7 @@ class _ProfilPageState extends State<ProfilPage> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // --- HEADER DINAMIS (Warna / Gambar dari Galeri) ---
+            // --- HEADER DINAMIS (Struktur asli) ---
             Container(
               width: double.infinity,
               padding: const EdgeInsets.only(top: 50, bottom: 30, left: 24, right: 24),
@@ -349,16 +342,8 @@ class _ProfilPageState extends State<ProfilPage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Tombol Kustomisasi Background
-                      IconButton(
-                        icon: const Icon(Icons.color_lens, color: Colors.white),
-                        onPressed: _tampilkanOpsiBackground,
-                      ),
-                      // Tombol Pengaturan Umum
-                      IconButton(
-                        icon: const Icon(Icons.settings, color: Colors.white),
-                        onPressed: _bukaPengaturan,
-                      ),
+                      IconButton(icon: const Icon(Icons.color_lens, color: Colors.white), onPressed: _tampilkanOpsiBackground),
+                      IconButton(icon: const Icon(Icons.settings, color: Colors.white), onPressed: _bukaPengaturan),
                     ],
                   ),
                   GestureDetector(
@@ -392,31 +377,16 @@ class _ProfilPageState extends State<ProfilPage> {
                   const SizedBox(height: 4),
                   Text(widget.user.email, style: const TextStyle(color: Colors.white70, fontSize: 14)),
                   const SizedBox(height: 12),
-                  
-                  // 📍 LEVEL BADGE
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                     decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
                     child: Text("Level $_level Pet Owner", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14)),
                   ),
-                  const SizedBox(height: 16),
-
-                  // 📍 INFO FOLLOWERS & FOLLOWING
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text("$_followersCount Pengikut", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      const SizedBox(width: 16),
-                      const Text("•", style: TextStyle(color: Colors.white70)),
-                      const SizedBox(width: 16),
-                      Text("$_followingCount Mengikuti", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
                 ],
               ),
             ),
 
-            // --- KONTEN UTAMA PROFILE ---
+            // --- KONTEN UTAMA PROFILE (Struktur asli) ---
             Padding(
               padding: const EdgeInsets.all(20.0),
               child: Column(
@@ -436,8 +406,7 @@ class _ProfilPageState extends State<ProfilPage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(_level >= 5 ? "Level Maksimal Tercapai!" : "Progress ke Level ${_level + 1}",
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      Text(_level >= 5 ? "Level Maksimal Tercapai!" : "Progress ke Level ${_level + 1}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                       Text("$_points/$nextTarget", style: const TextStyle(color: Colors.grey, fontSize: 14)),
                     ],
                   ),
@@ -445,10 +414,7 @@ class _ProfilPageState extends State<ProfilPage> {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(10),
                     child: LinearProgressIndicator(
-                      value: progressValue,
-                      minHeight: 8,
-                      backgroundColor: const Color(0xFFE0E0E0),
-                      valueColor: AlwaysStoppedAnimation<Color>(_headerColor), // Menyesuaikan warna tema
+                      value: progressValue, minHeight: 8, backgroundColor: const Color(0xFFE0E0E0), valueColor: AlwaysStoppedAnimation<Color>(_headerColor), 
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -456,8 +422,7 @@ class _ProfilPageState extends State<ProfilPage> {
                   const Text("Pencapaian", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                   const SizedBox(height: 12),
                   Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
+                    spacing: 10, runSpacing: 10,
                     children: [
                       _buildBadge("😊 Rookie", isActive: _level >= 1),
                       _buildBadge("🪄 Intermediate", isActive: _level >= 2),
@@ -473,34 +438,115 @@ class _ProfilPageState extends State<ProfilPage> {
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.shade100),
-                    ),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade100)),
                     child: Column(
                       children: [
-                        _buildRowStatDetail(Icons.thumb_up_alt_outlined, "Like Diterima (Pertanyaan)", "$_totalQuestionLikes"),
-                        const Divider(height: 24, thickness: 0.5),
-                        _buildRowStatDetail(Icons.thumb_up_alt, "Like Diterima (Jawaban)", "$_totalAnswerLikes"),
-                        const Divider(height: 24, thickness: 0.5),
-                        _buildRowStatDetail(Icons.access_time_rounded, "Total Jam Penggunaan", "${_totalHoursUsage.toStringAsFixed(1)} Jam"),
-                        const Divider(height: 24, thickness: 0.5),
-                        _buildRowStatDetail(Icons.question_answer_rounded, "Pertanyaan Dijawab", "$_myQuestionsAnswered"),
-                        const Divider(height: 24, thickness: 0.5),
-                        _buildRowStatDetail(Icons.check_circle_outline, "Jawaban Diberikan", "$_myAnswersGiven"),
-                        const Divider(height: 24, thickness: 0.5),
-                        _buildRowStatDetail(Icons.forum_outlined, "Rata-rata Penggunaan Forum", "$_forumUsagePercentage%"),
-                        const Divider(height: 24, thickness: 0.5),
-                        _buildRowStatDetail(Icons.smart_toy_outlined, "Rata-rata Penggunaan AI Helper", "$_aiUsagePercentage%"),
-                        const Divider(height: 24, thickness: 0.5),
+                        _buildRowStatDetail(Icons.thumb_up_alt_outlined, "Like Diterima (Pertanyaan)", "$_totalQuestionLikes"), const Divider(height: 24, thickness: 0.5),
+                        _buildRowStatDetail(Icons.thumb_up_alt, "Like Diterima (Jawaban)", "$_totalAnswerLikes"), const Divider(height: 24, thickness: 0.5),
+                        _buildRowStatDetail(Icons.access_time_rounded, "Total Jam Penggunaan", "${_totalHoursUsage.toStringAsFixed(1)} Jam"), const Divider(height: 24, thickness: 0.5),
+                        _buildRowStatDetail(Icons.question_answer_rounded, "Pertanyaan Dijawab", "$_myQuestionsAnswered"), const Divider(height: 24, thickness: 0.5),
+                        _buildRowStatDetail(Icons.check_circle_outline, "Jawaban Diberikan", "$_myAnswersGiven"), const Divider(height: 24, thickness: 0.5),
+                        _buildRowStatDetail(Icons.forum_outlined, "Rata-rata Penggunaan Forum", "$_forumUsagePercentage%"), const Divider(height: 24, thickness: 0.5),
+                        _buildRowStatDetail(Icons.smart_toy_outlined, "Rata-rata Penggunaan AI Helper", "$_aiUsagePercentage%"), const Divider(height: 24, thickness: 0.5),
                         _buildRowStatDetail(Icons.fact_check_outlined, "Rata-rata Akurasi Fakta", "$_factCheckAccuracy%"),
                       ],
                     ),
                   ),
                   const SizedBox(height: 30),
+
+                  // 📍 BAGIAN BARU: RIWAYAT JAWABAN (PORTFOLIO DIRI SENDIRI)
+                  const Text("Jawaban Saya", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E1E2C))),
+                  const SizedBox(height: 12),
+                  FutureBuilder<List<Map<String, dynamic>>>(
+                    future: DbHelper().getUserAnswers(_currentUsername),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                      if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                        return Container(
+                          width: double.infinity, padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
+                          child: Column(
+                            children: [
+                              Icon(Icons.chat_bubble_outline, size: 40, color: Colors.grey.shade300),
+                              const SizedBox(height: 12),
+                              Text("Kamu belum menjawab pertanyaan apapun.", style: TextStyle(color: Colors.grey.shade500)),
+                            ],
+                          ),
+                        );
+                      }
+                      
+                      return Column(
+                        children: snapshot.data!.map((data) => _buildAnswerHistoryCard(data)).toList(),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 30),
                 ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 📍 WIDGET BARU: KARTU RIWAYAT JAWABAN
+  Widget _buildAnswerHistoryCard(Map<String, dynamic> data) {
+    Map<String, dynamic> questionData = {
+      'id': data['id'], 'username': data['username'], 'category': data['category'],
+      'question': data['question'], 'description': data['description'], 'tags': data['tags'],
+      'image_path': data['image_path'], 'created_at': data['created_at'],
+      'likes': data['likes'], 'comments': data['comments'],
+    };
+
+    return GestureDetector(
+      onTap: () {
+        // Navigasi ke detail pertanyaan
+        Navigator.push(context, MaterialPageRoute(builder: (context) => DetailPertanyaanPage(question: questionData, user: widget.user)));
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16), padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header Pertanyaan Asli
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12)),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.help_outline, size: 16, color: Colors.grey.shade600),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text("Pertanyaan dari ${data['username']}:\n\"${data['question']}\"", style: TextStyle(color: Colors.grey.shade700, fontSize: 13, fontStyle: FontStyle.italic), maxLines: 2, overflow: TextOverflow.ellipsis),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            
+            // Konten Jawaban
+            Row(children: [Icon(Icons.chat_bubble_outline, size: 16, color: _headerColor), const SizedBox(width: 8), const Text("Jawaban Saya:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14))]),
+            const SizedBox(height: 6),
+            Text(data['answer_content'], maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, color: Colors.black87)),
+            
+            const SizedBox(height: 12),
+            
+            // Footer: Tanggal & Like
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(data['answer_date'].toString().split(' ')[0], style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+                Row(
+                  children: [
+                    const Icon(Icons.thumb_up_alt, size: 14, color: Colors.blueAccent),
+                    const SizedBox(width: 4),
+                    Text("${data['answer_likes']} Like", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent, fontSize: 12)),
+                  ],
+                ),
+              ],
             ),
           ],
         ),
@@ -513,9 +559,7 @@ class _ProfilPageState extends State<ProfilPage> {
       children: [
         Icon(icon, color: _headerColor, size: 20),
         const SizedBox(width: 12),
-        Expanded(
-          child: Text(label, style: const TextStyle(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.w500)),
-        ),
+        Expanded(child: Text(label, style: const TextStyle(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.w500))),
         Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87)),
       ],
     );
@@ -540,24 +584,14 @@ class _ProfilPageState extends State<ProfilPage> {
   Widget _buildBadge(String text, {required bool isActive}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: isActive ? const Color(0xFFFFF3CD) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isActive ? const Color(0xFFFFE066) : Colors.grey.shade200),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: isActive ? const Color(0xFF8B5E34) : Colors.grey.shade400,
-          fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-        ),
-      ),
+      decoration: BoxDecoration(color: isActive ? const Color(0xFFFFF3CD) : Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: isActive ? const Color(0xFFFFE066) : Colors.grey.shade200)),
+      child: Text(text, style: TextStyle(color: isActive ? const Color(0xFF8B5E34) : Colors.grey.shade400, fontWeight: isActive ? FontWeight.bold : FontWeight.normal)),
     );
   }
 }
 
 // ======================================================================
-// HALAMAN PENGATURAN (SETTINGS PAGE)
+// HALAMAN PENGATURAN (SETTINGS PAGE) - Tidak Diubah Sama Sekali
 // ======================================================================
 class PengaturanPage extends StatefulWidget {
   final VoidCallback onUbahNama;

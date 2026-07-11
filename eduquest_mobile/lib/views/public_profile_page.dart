@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/db_helper.dart';
 import '../models/user_model.dart';
+import 'detail_pertanyaan_page.dart'; // 📍 Import Halaman Detail
 
 class PublicProfilePage extends StatefulWidget {
-  final Map<String, dynamic> targetUser; // Data user yang sedang dilihat
-  final UserModel currentUser; // User kita yang sedang login
+  final Map<String, dynamic> targetUser; 
+  final UserModel currentUser; 
 
   const PublicProfilePage({super.key, required this.targetUser, required this.currentUser});
 
@@ -16,10 +17,8 @@ class PublicProfilePage extends StatefulWidget {
 
 class _PublicProfilePageState extends State<PublicProfilePage> {
   final DbHelper _dbHelper = DbHelper();
-  
   bool _isLoading = true;
   
-  // Data Profil Target
   late String _targetUsername;
   String _targetEmail = "";
   File? _imageFile;
@@ -39,14 +38,8 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
   int _totalAnswerLikes = 0;   
   double _totalHoursUsage = 0.0; 
 
-  // Kustomisasi Background Header (Dari memori target user)
   Color _headerColor = const Color(0xFF6B48FF);
   File? _headerImageFile;
-
-  // Data Sosial (Follow)
-  bool _isFollowing = false;
-  int _followersCount = 0;
-  int _followingCount = 0;
 
   @override
   void initState() {
@@ -59,7 +52,6 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
     try {
       final db = await _dbHelper.database;
       
-      // 1. Ambil data asli user target dari database
       var userRes = await db.query('users', where: 'username = ?', whereArgs: [_targetUsername]);
       if (userRes.isNotEmpty) {
         _targetEmail = userRes.first['email'] as String? ?? "";
@@ -75,7 +67,6 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
         _factCheckAccuracy = _points == 0 ? 0 : (65 + (_level * 6)).clamp(0, 98);
       }
 
-      // 2. Kalkulasi Statistik Forum Target
       var qCountRes = await db.rawQuery('SELECT COUNT(*) as total, SUM(likes) as totalLikes FROM questions WHERE username = ?', [_targetUsername]);
       int myQuestionsCount = (qCountRes.first['total'] as int?) ?? 0;
       _totalQuestionLikes = (qCountRes.first['totalLikes'] as int?) ?? 0;
@@ -96,7 +87,6 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
         _forumUsagePercentage = (((myQuestionsCount + _myAnswersGiven) / totalAktivitas) * 100).round();
       }
 
-      // 3. Muat Tema Header milik Target
       SharedPreferences prefs = await SharedPreferences.getInstance();
       int savedColor = prefs.getInt('header_color_$_targetUsername') ?? 0xFF6B48FF;
       _headerColor = Color(savedColor);
@@ -108,30 +98,16 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
 
       _totalHoursUsage = prefs.getDouble('app_usage_hours_$_targetUsername') ?? ((_streak * 1.5) + (totalAktivitas * 0.2));
 
-      // 4. Load Data Follower & Following
-      String myUsername = widget.currentUser.username ?? '';
-      _isFollowing = await _dbHelper.isFollowing(myUsername, _targetUsername);
-      _followersCount = await _dbHelper.getFollowersCount(_targetUsername);
-      _followingCount = await _dbHelper.getFollowingCount(_targetUsername);
-
       if (mounted) {
         setState(() {
           _isLoading = false;
         });
       }
     } catch (e) {
-      debugPrint("Error loading public profile: $e");
       if (mounted) {
         setState(() => _isLoading = false);
       }
     }
-  }
-
-  // --- FUNGSI FOLLOW/UNFOLLOW ---
-  Future<void> _toggleFollowAction() async {
-    String myUsername = widget.currentUser.username ?? '';
-    await _dbHelper.toggleFollow(myUsername, _targetUsername);
-    await _loadTargetUserData(); // Refresh UI setelah klik follow
   }
 
   @override
@@ -140,43 +116,29 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
 
     double progressValue = (_level >= 5) ? 1.0 : (_points % 50) / 50.0;
     int nextTarget = (_level >= 5) ? _points : (_level * 50);
-    bool isMe = _targetUsername == widget.currentUser.username;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // --- HEADER DINAMIS (Warna / Gambar dari Target User) ---
+            // --- HEADER (Struktur asli) ---
             Container(
               width: double.infinity,
               padding: const EdgeInsets.only(top: 50, bottom: 30, left: 24, right: 24),
               decoration: BoxDecoration(
                 color: _headerImageFile == null ? _headerColor : null,
                 image: _headerImageFile != null 
-                    ? DecorationImage(
-                        image: FileImage(_headerImageFile!), 
-                        fit: BoxFit.cover, 
-                        colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.4), BlendMode.darken)
-                      ) 
+                    ? DecorationImage(image: FileImage(_headerImageFile!), fit: BoxFit.cover, colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.4), BlendMode.darken)) 
                     : null,
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(32),
-                  bottomRight: Radius.circular(32),
-                ),
+                borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(32), bottomRight: Radius.circular(32)),
               ),
               child: Column(
                 children: [
-                  // Tombol Back (Tanpa tombol setting/warna)
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () => Navigator.pop(context),
-                    ),
+                    child: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.pop(context)),
                   ),
-                  
-                  // Foto Profil Target (Hanya lihat, tidak bisa diedit)
                   CircleAvatar(
                     radius: 50,
                     backgroundColor: Colors.white,
@@ -187,58 +149,21 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                       child: _imageFile == null ? const Icon(Icons.person, size: 55, color: Colors.grey) : null,
                     ),
                   ),
-                  
                   const SizedBox(height: 16),
-                  Text(
-                    _targetUsername,
-                    style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold, shadows: [Shadow(color: Colors.black26, blurRadius: 4)]),
-                  ),
+                  Text(_targetUsername, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold, shadows: [Shadow(color: Colors.black26, blurRadius: 4)])),
                   const SizedBox(height: 4),
                   Text(_targetEmail, style: const TextStyle(color: Colors.white70, fontSize: 14)),
                   const SizedBox(height: 12),
-                  
-                  // Badge Level & Data Followers
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                     decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
                     child: Text("Level $_level Pet Owner", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14)),
                   ),
-                  const SizedBox(height: 16),
-                  
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text("$_followersCount Pengikut", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      const SizedBox(width: 16),
-                      const Text("•", style: TextStyle(color: Colors.white70)),
-                      const SizedBox(width: 16),
-                      Text("$_followingCount Mengikuti", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  
-                  // Tombol Follow (Disembunyikan jika yang dibuka adalah profil sendiri)
-                  if (!isMe) ...[
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: 150,
-                      height: 40,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _isFollowing ? Colors.white.withOpacity(0.3) : Colors.white,
-                          foregroundColor: _isFollowing ? Colors.white : _headerColor,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                          elevation: 0,
-                        ),
-                        onPressed: _toggleFollowAction,
-                        child: Text(_isFollowing ? "Mengikuti" : "Ikuti", style: const TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
 
-            // --- KONTEN UTAMA PROFILE ---
+            // --- KONTEN UTAMA PROFILE (Struktur asli) ---
             Padding(
               padding: const EdgeInsets.all(20.0),
               child: Column(
@@ -258,8 +183,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(_level >= 5 ? "Level Maksimal Tercapai!" : "Progress ke Level ${_level + 1}",
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      Text(_level >= 5 ? "Level Maksimal Tercapai!" : "Progress ke Level ${_level + 1}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                       Text("$_points/$nextTarget", style: const TextStyle(color: Colors.grey, fontSize: 14)),
                     ],
                   ),
@@ -267,10 +191,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(10),
                     child: LinearProgressIndicator(
-                      value: progressValue,
-                      minHeight: 8,
-                      backgroundColor: const Color(0xFFE0E0E0),
-                      valueColor: AlwaysStoppedAnimation<Color>(_headerColor), 
+                      value: progressValue, minHeight: 8, backgroundColor: const Color(0xFFE0E0E0), valueColor: AlwaysStoppedAnimation<Color>(_headerColor), 
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -295,11 +216,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.shade100),
-                    ),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade100)),
                     child: Column(
                       children: [
                         _buildRowStatDetail(Icons.thumb_up_alt_outlined, "Like Diterima (Pertanyaan)", "$_totalQuestionLikes"),
@@ -321,8 +238,100 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                     ),
                   ),
                   const SizedBox(height: 30),
+
+                  // 📍 BAGIAN BARU: RIWAYAT JAWABAN (PORTFOLIO)
+                  Text("Jawaban oleh $_targetUsername", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E1E2C))),
+                  const SizedBox(height: 12),
+                  FutureBuilder<List<Map<String, dynamic>>>(
+                    future: DbHelper().getUserAnswers(_targetUsername),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                      if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                        return Container(
+                          width: double.infinity, padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
+                          child: Column(
+                            children: [
+                              Icon(Icons.chat_bubble_outline, size: 40, color: Colors.grey.shade300),
+                              const SizedBox(height: 12),
+                              Text("Belum ada jawaban yang diberikan.", style: TextStyle(color: Colors.grey.shade500)),
+                            ],
+                          ),
+                        );
+                      }
+
+                      return Column(
+                        children: snapshot.data!.map((data) => _buildAnswerHistoryCard(data)).toList(),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 30),
                 ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 📍 WIDGET BARU: KARTU RIWAYAT JAWABAN
+  Widget _buildAnswerHistoryCard(Map<String, dynamic> data) {
+    Map<String, dynamic> questionData = {
+      'id': data['id'], 'username': data['username'], 'category': data['category'],
+      'question': data['question'], 'description': data['description'], 'tags': data['tags'],
+      'image_path': data['image_path'], 'created_at': data['created_at'],
+      'likes': data['likes'], 'comments': data['comments'],
+    };
+
+    return GestureDetector(
+      onTap: () {
+        // Navigasi ke detail pertanyaan
+        Navigator.push(context, MaterialPageRoute(builder: (context) => DetailPertanyaanPage(question: questionData, user: widget.currentUser)));
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16), padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header Pertanyaan Asli
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12)),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.help_outline, size: 16, color: Colors.grey.shade600),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text("Pertanyaan dari ${data['username']}:\n\"${data['question']}\"", style: TextStyle(color: Colors.grey.shade700, fontSize: 13, fontStyle: FontStyle.italic), maxLines: 2, overflow: TextOverflow.ellipsis),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            
+            // Konten Jawaban
+            Row(children: [Icon(Icons.chat_bubble_outline, size: 16, color: _headerColor), const SizedBox(width: 8), const Text("Jawaban Saya:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14))]),
+            const SizedBox(height: 6),
+            Text(data['answer_content'], maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, color: Colors.black87)),
+            
+            const SizedBox(height: 12),
+            
+            // Footer: Tanggal & Like
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(data['answer_date'].toString().split(' ')[0], style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+                Row(
+                  children: [
+                    const Icon(Icons.thumb_up_alt, size: 14, color: Colors.blueAccent),
+                    const SizedBox(width: 4),
+                    Text("${data['answer_likes']} Like", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent, fontSize: 12)),
+                  ],
+                ),
+              ],
             ),
           ],
         ),

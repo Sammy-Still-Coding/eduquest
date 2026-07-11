@@ -207,7 +207,7 @@ class _RuangBelajarPageState extends State<RuangBelajarPage> {
                           shape: BoxShape.circle),
                       child: IconButton(
                           icon: const Icon(Icons.arrow_back, color: Colors.white),
-                          onPressed: () {})),
+                          onPressed: () {Navigator.pop(context);})),
                   const SizedBox(width: 16),
                   const Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

@@ -357,4 +357,22 @@ class DbHelper {
     final res = await db.rawQuery('SELECT COUNT(*) as count FROM follows WHERE follower = ?', [username]);
     return res.first['count'] as int? ?? 0;
   }
+
+  // --- FUNGSI MENGAMBIL RIWAYAT JAWABAN USER ---
+  Future<List<Map<String, dynamic>>> getUserAnswers(String username) async {
+    final db = await database;
+    // Mengambil teks jawaban sekaligus detail pertanyaan aslinya
+    return await db.rawQuery('''
+      SELECT 
+        a.content AS answer_content, 
+        a.created_at AS answer_date,
+        a.likes AS answer_likes, 
+        q.id, q.username, q.category, q.question, q.description, 
+        q.tags, q.image_path, q.created_at, q.likes, q.comments
+      FROM answers a
+      JOIN questions q ON a.question_id = q.id
+      WHERE a.username = ?
+      ORDER BY a.id DESC
+    ''', [username]);
+  }
 }
