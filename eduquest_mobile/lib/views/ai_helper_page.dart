@@ -19,7 +19,7 @@ class _AiHelperPageState extends State<AiHelperPage> {
   // GANTI DENGAN API KEY GROQ KAMU
   // LINK API KEY : https://console.groq.com/keys
   // ============================================================
-  final String apiKey = "GANTI DENGAN API KEY GROQ KAMU";
+  final String apiKey = "API KEY";
   final String modelName = "llama-3.3-70b-versatile";
 
   bool isPersonalHelper = true;

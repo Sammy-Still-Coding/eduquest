@@ -22,6 +22,7 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
+  final TextEditingController _answerController = TextEditingController();
   int _selectedIndex = 0;
   final Color _primaryPurple = const Color(0xFF7B61FF);
 
@@ -115,27 +116,28 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  // --- FUNGSI LIKE PERTANYAAN (Diperbaiki 1 Akun 1 Like) ---
-  Future<void> _likeQuestion(int questionId) async {
+  // 📍 FUNGSI LIKE PERTANYAAN (Diperbarui dengan Notifikasi)
+  Future<void> _likeQuestion(Map<String, dynamic> question) async {
     if (_prefs == null) return;
 
-    // Membuat kunci unik (misal: liked_q_5_Budi)
+    int questionId = question['id'];
     String likeKey = 'liked_q_${questionId}_${currentUser.username}';
     bool isLiked = _prefs!.getBool(likeKey) ?? false;
 
     final db = await DbHelper().database;
 
     if (isLiked) {
-      // Batal Like (Unlike)
       await db.rawUpdate('UPDATE questions SET likes = likes - 1 WHERE id = ?', [questionId]);
       await _prefs!.setBool(likeKey, false);
     } else {
-      // Beri Like
       await db.rawUpdate('UPDATE questions SET likes = likes + 1 WHERE id = ?', [questionId]);
       await _prefs!.setBool(likeKey, true);
+      
+      // Kirim Notifikasi
+      await DbHelper().insertNotification(question['username'], currentUser.username ?? '', 'like_q', question['question']);
     }
     
-    setState(() {}); // Refresh UI
+    setState(() {}); 
   }
 
   void _onItemTapped(int index) async {
@@ -147,46 +149,85 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  // --- FUNGSI POP-UP NOTIFIKASI ---
+// 📍 FUNGSI POP-UP NOTIFIKASI DINAMIS
   void _showNotificationBottomSheet() {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) {
         return Container(
           padding: const EdgeInsets.all(24),
-          height: 350,
+          height: 450,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text("Notifikasi", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               Expanded(
-                child: ListView(
-                  children: [
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: CircleAvatar(
-                        backgroundColor: Colors.amber.shade100,
-                        child: const Icon(Icons.auto_awesome, color: Colors.amber),
-                      ),
-                      title: const Text("Selamat datang di EduQuest!", style: TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: const Text("Mulai petualangan belajarmu, kumpulkan poin, dan tingkatkan level Pet kamu hari ini."),
-                    ),
-                    const Divider(),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: CircleAvatar(
-                        backgroundColor: Colors.blue.shade100,
-                        child: const Icon(Icons.local_fire_department, color: Colors.blue),
-                      ),
-                      title: const Text("Streak Harian Aktif"),
-                      subtitle: const Text("Jangan lupa login setiap hari agar streak belajarmu tidak putus!"),
-                    ),
-                  ],
-                ),
+                child: FutureBuilder<List<Map<String, dynamic>>>(
+                  future: DbHelper().getNotifications(currentUser.username ?? ''),
+                  builder: (context, snapshot) {
+                    List<Widget> listItems = [];
+
+                    // 1. NOTIFIKASI INTERAKSI (Like & Jawaban)
+                    if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                      listItems.add(const Text("Aktivitas Terbaru", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)));
+                      listItems.add(const SizedBox(height: 8));
+
+                      for (var notif in snapshot.data!) {
+                        String userImg = notif['profile_image'] ?? '';
+                        bool isLike = notif['type'].startsWith('like');
+                        
+                        String pesanNotif = "";
+                        if (notif['type'] == 'like_q') pesanNotif = "menyukai pertanyaanmu";
+                        else if (notif['type'] == 'like_a') pesanNotif = "menyukai jawabanmu";
+                        else if (notif['type'] == 'answer') pesanNotif = "menjawab pertanyaanmu";
+
+                        listItems.add(
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Stack(
+                              alignment: Alignment.bottomRight,
+                              children: [
+                                CircleAvatar(
+                                  radius: 22,
+                                  backgroundColor: _primaryPurple,
+                                  backgroundImage: userImg.isNotEmpty ? FileImage(File(userImg)) : null,
+                                  child: userImg.isEmpty ? Text(notif['actor'][0].toUpperCase(), style: const TextStyle(color: Colors.white)) : null,
+                                ),
+                                CircleAvatar(
+                                  radius: 8,
+                                  backgroundColor: isLike ? Colors.pink : Colors.blue,
+                                  child: Icon(isLike ? Icons.favorite : Icons.chat_bubble, size: 10, color: Colors.white),
+                                )
+                              ],
+                            ),
+                            title: RichText(
+                              text: TextSpan(
+                                style: const TextStyle(color: Colors.black87, fontSize: 14),
+                                children: [
+                                  TextSpan(text: notif['actor'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  TextSpan(text: " $pesanNotif"),
+                                ]
+                              ),
+                            ),
+                            subtitle: Text("\"${notif['content_preview']}\"", maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontStyle: FontStyle.italic)),
+                            trailing: Text(notif['created_at'].toString().split(' ')[0], style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                          )
+                        );
+                        listItems.add(const Divider(height: 8));
+                      }
+                      listItems.add(const SizedBox(height: 16));
+                    }
+
+                    // 2. NOTIFIKASI SISTEM
+                    listItems.add(const Text("Sistem", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)));
+                    listItems.add(const SizedBox(height: 8));
+                    listItems.add(ListTile(contentPadding: EdgeInsets.zero, leading: CircleAvatar(backgroundColor: Colors.amber.shade100, child: const Icon(Icons.auto_awesome, color: Colors.amber)), title: const Text("Selamat datang di EduQuest!", style: TextStyle(fontWeight: FontWeight.bold)), subtitle: const Text("Mulai petualangan belajarmu hari ini.")));
+                    
+                    return ListView(children: listItems);
+                  }
+                )
               ),
             ],
           ),
@@ -291,31 +332,46 @@ class _DashboardPageState extends State<DashboardPage> {
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16))),
                       onPressed: () async {
-                        if (ansController.text.trim().isEmpty &&
-                            ansImage == null) return;
+                        String answerText = ansController.text.trim();
+                        if (answerText.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Jawaban tidak boleh kosong!'), backgroundColor: Colors.red),
+                          );
+                          return;
+                        }
 
-                        await DbHelper().insertAnswer({
+                        // 1. Simpan ke database (Jawaban)
+                        final db = await DbHelper().database;
+                        await db.insert('answers', {
                           'question_id': question['id'],
-                          'username': currentUser.username ?? '',
-                          'content': ansController.text.trim(),
-                          'image_path': ansImage?.path ?? '',
+                          'username': currentUser.username,
+                          'content': answerText,
+                          'likes': 0,
                           'created_at': DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now()),
-                          'likes': 0 // Set default likes
                         });
 
-                        final db = await DbHelper().database;
+                        // 2. Tambah jumlah komentar di pertanyaan
                         await db.rawUpdate('UPDATE questions SET comments = comments + 1 WHERE id = ?', [question['id']]);
+                        
+                        // 3. Kirim Notifikasi ke pembuat pertanyaan
+                        await DbHelper().insertNotification(question['username'], currentUser.username ?? '', 'answer', question['question']);
 
-                        await DbHelper().addPoints(currentUser.username ?? '', 10);
-                        await _refreshUserData(); 
-
-                        if (!context.mounted) return;
-                        Navigator.pop(context); 
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        // 4. TUTUP POP-UP & TAMPILKAN PESAN SUKSES ✨
+                        if (context.mounted) {
+                          Navigator.pop(context); // Menutup bottom sheet (pop-up)
+                          
+                          ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                                content: Text("Jawaban terkirim! +10 Poin Pet 🌟"),
-                                backgroundColor: Colors.green));
-                        setState(() {}); 
+                              content: Text('Hore! Jawabanmu berhasil dikirim. 🎉'),
+                              backgroundColor: Colors.green,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        }
+
+                        // 5. Bersihkan kolom teks & Refresh data di halaman utama
+                        ansController.clear();
+                        _refreshUserData(); // Panggil fungsi refresh kamu (bisa jadi _loadQuestions() atau setState(() {}))
                       },
                       child: const Text("Kirim Jawaban",
                           style: TextStyle(fontWeight: FontWeight.bold)),
@@ -820,7 +876,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       children: [
                         // 📍 TOMBOL LIKE DENGAN WARNA DINAMIS
                         InkWell(
-                          onTap: () => _likeQuestion(questionId),
+                          onTap: () => _likeQuestion(questionData),
                           child: Row(
                             children: [
                               Icon(isLiked ? Icons.thumb_up : Icons.thumb_up_outlined, 
@@ -838,8 +894,8 @@ class _DashboardPageState extends State<DashboardPage> {
                         Icon(Icons.chat_bubble_outline,
                             size: 18, color: Colors.grey.shade600),
                         const SizedBox(width: 4),
-                        Text("${questionData['comments']}",
-                            style: TextStyle(color: Colors.grey.shade600)),
+                        Text("${questionData['actual_comment_count'] ?? questionData['comments']}",
+                            style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
                       ],
                     ),
                     ElevatedButton(

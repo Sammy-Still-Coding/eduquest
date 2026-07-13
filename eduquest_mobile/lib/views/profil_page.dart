@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../../main.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -623,6 +624,7 @@ class _PengaturanPageState extends State<PengaturanPage> {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setBool('is_dark_mode', value);
     setState(() { _isDarkMode = value; });
+    
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(value ? 'Mode Gelap diaktifkan!' : 'Mode Terang diaktifkan!'),

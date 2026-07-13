@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // 📍 Tambahan import
 import '../core/db_helper.dart';
 import '../models/user_model.dart';
+import 'dashboard_page.dart';
 
 final DateTime sessionStart = DateTime.now();
 
@@ -230,9 +231,26 @@ class _PetKuPageState extends State<PetKuPage> {
             children: [
               Row(
                 children: [
-                  Container(decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle), child: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () {
-                     Navigator.pop(context);
-                  })),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2), 
+                      shape: BoxShape.circle
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white), 
+                      onPressed: () {
+                        // 📍 PERBAIKAN: Gunakan pushAndRemoveUntil agar tidak blank
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(
+                            // Pastikan variabel user sesuai dengan yang ada di halaman ini (misal: widget.user)
+                            builder: (context) => DashboardPage(user: widget.user),
+                          ),
+                          (route) => false,
+                        );
+                      }
+                    )
+                  ),
                   const SizedBox(width: 16),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -247,7 +265,13 @@ class _PetKuPageState extends State<PetKuPage> {
                 onPressed: _showEditPetDialog,
                 icon: const Icon(Icons.tune, size: 16),
                 label: const Text("Edit", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFFB53471), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), elevation: 0),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white, 
+                  foregroundColor: const Color(0xFFB53471), 
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), 
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), 
+                  elevation: 0
+                ),
               ),
             ],
           ),

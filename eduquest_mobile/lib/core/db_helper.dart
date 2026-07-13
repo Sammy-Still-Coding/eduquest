@@ -3,6 +3,7 @@ import 'package:crypto/crypto.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import '../models/user_model.dart';
+import 'package:intl/intl.dart';
 
 class DbHelper {
   static Database? _database;
@@ -129,6 +130,18 @@ class DbHelper {
           await db.execute(
               'ALTER TABLE chats ADD COLUMN username TEXT DEFAULT ""');
         }
+        
+
+        await db.execute('''
+          CREATE TABLE notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            receiver TEXT,
+            actor TEXT,
+            type TEXT, -- Isinya: 'answer', 'like_q', atau 'like_a'
+            content_preview TEXT,
+            created_at TEXT
+          )
+        ''');
       },
     );
   }
@@ -241,29 +254,43 @@ class DbHelper {
   }
 
   Future<List<Map<String, dynamic>>> getQuestions(
-      String searchQuery, String selectedCategory) async {
-    final db = await database;
-    String whereClause = '';
-    List<dynamic> whereArgs = [];
+        String searchQuery, String selectedCategory) async {
+      final db = await database;
+      
+      // 📍 Query dasar dengan sub-select untuk menghitung jumlah jawaban sebenarnya
+      String sql = '''
+        SELECT q.*, 
+        (SELECT COUNT(*) FROM answers WHERE question_id = q.id) as actual_comment_count 
+        FROM questions q
+      ''';
+      
+      String whereClause = '';
+      List<dynamic> whereArgs = [];
 
-    if (searchQuery.isNotEmpty) {
-      whereClause += 'question LIKE ?';
-      whereArgs.add('%$searchQuery%');
-    }
+      // Filter Pencarian
+      if (searchQuery.isNotEmpty) {
+        whereClause += 'q.question LIKE ?';
+        whereArgs.add('%$searchQuery%');
+      }
 
-    if (selectedCategory != 'Semua' && selectedCategory.isNotEmpty) {
-      if (whereClause.isNotEmpty) whereClause += ' AND ';
-      whereClause += 'category = ?';
-      whereArgs.add(selectedCategory);
-    }
+      // Filter Kategori
+      if (selectedCategory != 'Semua' && selectedCategory.isNotEmpty) {
+        if (whereClause.isNotEmpty) whereClause += ' AND ';
+        whereClause += 'q.category = ?';
+        whereArgs.add(selectedCategory);
+      }
 
-    if (whereClause.isNotEmpty) {
-      return await db.query('questions',
-          where: whereClause, whereArgs: whereArgs, orderBy: 'id DESC');
-    } else {
-      return await db.query('questions', orderBy: 'id DESC');
+      // Gabungkan WHERE clause jika ada filter yang aktif
+      if (whereClause.isNotEmpty) {
+        sql += ' WHERE $whereClause';
+      }
+
+      // Urutkan dari yang terbaru
+      sql += ' ORDER BY q.id DESC';
+
+      // Eksekusi raw query
+      return await db.rawQuery(sql, whereArgs);
     }
-  }
 
   Future<int> insertAnswer(Map<String, dynamic> answerData) async {
     final db = await database;
@@ -373,6 +400,32 @@ class DbHelper {
       JOIN questions q ON a.question_id = q.id
       WHERE a.username = ?
       ORDER BY a.id DESC
+    ''', [username]);
+  }
+  // --- FUNGSI NOTIFIKASI ---
+  Future<void> insertNotification(String receiver, String actor, String type, String contentPreview) async {
+    // Jangan kirim notifikasi jika aktivitas dilakukan oleh diri sendiri
+    if (receiver == actor) return; 
+
+    final db = await database;
+    await db.insert('notifications', {
+      'receiver': receiver,
+      'actor': actor,
+      'type': type,
+      'content_preview': contentPreview, // Cuplikan teks pertanyaan/jawaban
+      'created_at': DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now()),
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getNotifications(String username) async {
+    final db = await database;
+    // Mengambil notifikasi + foto profil si pelaku aktivitas (actor)
+    return await db.rawQuery('''
+      SELECT n.*, u.profile_image 
+      FROM notifications n 
+      LEFT JOIN users u ON n.actor = u.username 
+      WHERE n.receiver = ? 
+      ORDER BY n.id DESC LIMIT 20
     ''', [username]);
   }
 }

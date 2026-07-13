@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'ruang_belajar_detail_page.dart';
 import '../models/user_model.dart';
 import '../core/db_helper.dart';
+import 'dashboard_page.dart';
 
 class RuangBelajarPage extends StatefulWidget {
   final UserModel user;
@@ -196,35 +197,53 @@ class _RuangBelajarPageState extends State<RuangBelajarPage> {
                 end: Alignment.bottomRight),
             borderRadius: BorderRadius.vertical(bottom: Radius.circular(40)),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2), 
+                  shape: BoxShape.circle
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  onPressed: () {
+                    // 📍 PERBAIKAN: Gunakan pushAndRemoveUntil untuk kembali ke Dashboard
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(
+                        // Pastikan variabel user sesuai dengan yang ada di halaman ini (misal: widget.user)
+                        builder: (context) => DashboardPage(user: widget.user), 
+                      ),
+                      (route) => false, // Menghapus tumpukan rute sebelumnya agar tidak blank
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 16),
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                      decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2), 
-                          shape: BoxShape.circle),
-                      child: IconButton(
-                          icon: const Icon(Icons.arrow_back, color: Colors.white),
-                          onPressed: () {Navigator.pop(context);})),
-                  const SizedBox(width: 16),
-                  const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("Ruang Belajar",
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold)),
-                      Text("Belajar bareng teman-teman",
-                          style: TextStyle(color: Colors.white70, fontSize: 14)),
-                    ],
-                  )
+                  Text(
+                    "Ruang Belajar",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold
+                    )
+                  ),
+                  Text(
+                    "Belajar bareng teman-teman",
+                    style: TextStyle(color: Colors.white70, fontSize: 14)
+                  ),
                 ],
               )
             ],
-          ),
+          )
+        ],
+      ),
         ),
         const SizedBox(height: 20),
         Padding(

@@ -59,10 +59,13 @@ class _DetailPertanyaanPageState extends State<DetailPertanyaanPage> {
     }
   }
 
-  Future<void> _toggleLikeAnswer(int answerId) async {
+  Future<void> _toggleLikeAnswer(Map<String, dynamic> answer) async {
     if (_prefs == null) return;
+    
+    int answerId = answer['id'];
     String likeKey = 'liked_a_${answerId}_${widget.user.username}';
     bool isLiked = _prefs!.getBool(likeKey) ?? false;
+    
     final db = await DbHelper().database;
 
     if (isLiked) {
@@ -71,7 +74,11 @@ class _DetailPertanyaanPageState extends State<DetailPertanyaanPage> {
     } else {
       await db.rawUpdate('UPDATE answers SET likes = likes + 1 WHERE id = ?', [answerId]);
       await _prefs!.setBool(likeKey, true);
+      
+      // Kirim Notifikasi
+      await DbHelper().insertNotification(answer['username'], widget.user.username ?? '', 'like_a', answer['content']);
     }
+    
     await _loadAnswersAndAuthor();
   }
 
