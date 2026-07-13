@@ -22,6 +22,11 @@ class _DetailPertanyaanPageState extends State<DetailPertanyaanPage> {
   bool _isLoading = true;
   SharedPreferences? _prefs;
 
+  // 📍 Toggle filter: false = urutan kronologis (default, stabil, tidak pernah
+  // berubah sendiri), true = diurutkan by likes terbanyak HANYA saat user
+  // menekan tombol filter secara eksplisit.
+  bool _sortByMostLiked = false;
+
   @override
   void initState() {
     super.initState();
@@ -34,21 +39,28 @@ class _DetailPertanyaanPageState extends State<DetailPertanyaanPage> {
   }
 
   // 📍 MENGAMBIL DATA JAWABAN & DATA PENULIS PERTANYAAN
+  // Query & sorting (ORDER BY likes DESC) HANYA dipanggil di sini, yaitu saat
+  // pertama kali halaman dibuka. Ini sengaja TIDAK dipanggil lagi setiap kali
+  // ada like baru, supaya urutan jawaban tidak berubah-ubah / "kepental" ke atas
+  // tiap kali salah satu jawaban di-like (itu penyebab bug "harus like urutan").
   Future<void> _loadAnswersAndAuthor() async {
     final db = await DbHelper().database;
     final int qId = widget.question['id'];
-    
+
     // 1. Ambil data author terbaru
     final authorList = await db.query('users', where: 'username = ?', whereArgs: [widget.question['username']]);
     if (authorList.isNotEmpty) _authorData = authorList.first;
 
     // 2. Ambil data jawaban (JOIN untuk foto profil penjawab)
+    // 📍 Default-nya kronologis (id ASC), BUKAN by likes. Urutan ini akan
+    // tetap sama meskipun ada like baru masuk. Sort by likes cuma dipakai
+    // sementara di tampilan (lihat _sortByMostLiked), tidak menyentuh query ini.
     final List<Map<String, dynamic>> answers = await db.rawQuery('''
       SELECT answers.*, users.profile_image 
       FROM answers 
       LEFT JOIN users ON answers.username = users.username 
       WHERE answers.question_id = ? 
-      ORDER BY answers.likes DESC, answers.id ASC
+      ORDER BY answers.id ASC
     ''', [qId]);
 
     if (mounted) {
@@ -61,11 +73,12 @@ class _DetailPertanyaanPageState extends State<DetailPertanyaanPage> {
 
   Future<void> _toggleLikeAnswer(Map<String, dynamic> answer) async {
     if (_prefs == null) return;
-    
-    int answerId = answer['id'];
-    String likeKey = 'liked_a_${answerId}_${widget.user.username}';
-    bool isLiked = _prefs!.getBool(likeKey) ?? false;
-    
+
+    final int answerId = answer['id'];
+    final String likeKey = 'liked_a_${answerId}_${widget.user.username}';
+    final bool isLiked = _prefs!.getBool(likeKey) ?? false;
+    final int delta = isLiked ? -1 : 1;
+
     final db = await DbHelper().database;
 
     if (isLiked) {
@@ -74,12 +87,40 @@ class _DetailPertanyaanPageState extends State<DetailPertanyaanPage> {
     } else {
       await db.rawUpdate('UPDATE answers SET likes = likes + 1 WHERE id = ?', [answerId]);
       await _prefs!.setBool(likeKey, true);
-      
-      // Kirim Notifikasi
+
+      // Kirim Notifikasi ke penjawab bahwa jawabannya disukai
       await DbHelper().insertNotification(answer['username'], widget.user.username ?? '', 'like_a', answer['content']);
     }
-    
-    await _loadAnswersAndAuthor();
+
+    // 📍 FIX: Update angka like SECARA LOKAL di posisi yang sama (by id),
+    // BUKAN reload+resort seluruh list dari DB. Ini menjaga urutan jawaban
+    // tetap stabil, sehingga tidak perlu "like yang di atas dulu" supaya
+    // like di bawahnya bisa diproses.
+    if (mounted) {
+      final index = _answers.indexWhere((a) => a['id'] == answerId);
+      if (index != -1) {
+        setState(() {
+          _answers[index] = {
+            ..._answers[index],
+            'likes': (_answers[index]['likes'] as int) + delta,
+          };
+        });
+      }
+    }
+  }
+
+  // 📍 List yang ditampilkan. _answers (sumber asli, urutan kronologis) tidak
+  // pernah diubah urutannya; kalau _sortByMostLiked aktif, kita bikin SALINAN
+  // lalu diurutkan berdasarkan likes, khusus untuk tampilan saja.
+  List<Map<String, dynamic>> get _displayedAnswers {
+    if (!_sortByMostLiked) return _answers;
+    final sorted = List<Map<String, dynamic>>.from(_answers);
+    sorted.sort((a, b) {
+      final likeCompare = (b['likes'] as int).compareTo(a['likes'] as int);
+      if (likeCompare != 0) return likeCompare;
+      return (a['id'] as int).compareTo(b['id'] as int); // tie-breaker biar stabil
+    });
+    return sorted;
   }
 
   @override
@@ -134,19 +175,50 @@ class _DetailPertanyaanPageState extends State<DetailPertanyaanPage> {
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(height: 24),
-                Row(children: [const Icon(Icons.forum, color: Colors.blueAccent), const SizedBox(width: 8), Text("${_answers.length} Jawaban", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))]),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(children: [const Icon(Icons.forum, color: Colors.blueAccent), const SizedBox(width: 8), Text("${_answers.length} Jawaban", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))]),
+                    // 📍 TOMBOL FILTER: klik untuk toggle antara urutan kronologis
+                    // dan urutan like terbanyak. Sorting cuma di tampilan (_displayedAnswers),
+                    // urutan asli & data di _answers tidak ikut berubah.
+                    InkWell(
+                      onTap: () => setState(() => _sortByMostLiked = !_sortByMostLiked),
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _sortByMostLiked ? _primaryPurple.withValues(alpha: 0.12) : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.thumb_up, size: 14, color: _sortByMostLiked ? _primaryPurple : Colors.grey.shade600),
+                            const SizedBox(width: 6),
+                            Text(
+                              _sortByMostLiked ? "Like Terbanyak" : "Terbaru",
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _sortByMostLiked ? _primaryPurple : Colors.grey.shade600),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 16),
-                
-                if (_answers.isEmpty)
+
+                if (_displayedAnswers.isEmpty)
                   Center(child: Padding(padding: const EdgeInsets.all(20), child: Text("Belum ada jawaban.", style: TextStyle(color: Colors.grey.shade500))))
                 else
-                  ..._answers.map((answer) {
+                  ..._displayedAnswers.map((answer) {
                     bool isAnswerLiked = _prefs?.getBool('liked_a_${answer['id']}_${widget.user.username}') ?? false;
                     String? ansAuthorImg = answer['profile_image'];
 
                     return Container(
+                      key: ValueKey(answer['id']),
                       margin: const EdgeInsets.only(bottom: 16),
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
@@ -188,7 +260,7 @@ class _DetailPertanyaanPageState extends State<DetailPertanyaanPage> {
                           const SizedBox(height: 12),
                           const Divider(),
                           InkWell(
-                            onTap: () => _toggleLikeAnswer(answer['id']),
+                            onTap: () => _toggleLikeAnswer(answer),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(vertical: 4),
                               child: Row(

@@ -332,20 +332,23 @@ class _DashboardPageState extends State<DashboardPage> {
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16))),
                       onPressed: () async {
-                        String answerText = ansController.text.trim();
-                        if (answerText.isEmpty) {
+                        String answerText = ansController.text.trim(); // Pastikan pakai ansController ya
+                        
+                        // Boleh kirim foto saja (tanpa teks) atau teks saja
+                        if (answerText.isEmpty && ansImage == null) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Jawaban tidak boleh kosong!'), backgroundColor: Colors.red),
+                            const SnackBar(content: Text('Jawaban atau foto tidak boleh kosong!'), backgroundColor: Colors.red),
                           );
                           return;
                         }
 
-                        // 1. Simpan ke database (Jawaban)
+                        // 1. Simpan ke database (Jawaban + Foto)
                         final db = await DbHelper().database;
                         await db.insert('answers', {
                           'question_id': question['id'],
                           'username': currentUser.username,
                           'content': answerText,
+                          'image_path': ansImage?.path ?? '', // 📍 INI YANG SEBELUMNYA HILANG!
                           'likes': 0,
                           'created_at': DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now()),
                         });
@@ -369,9 +372,11 @@ class _DashboardPageState extends State<DashboardPage> {
                           );
                         }
 
-                        // 5. Bersihkan kolom teks & Refresh data di halaman utama
+                        // 5. Bersihkan form & Refresh data
                         ansController.clear();
-                        _refreshUserData(); // Panggil fungsi refresh kamu (bisa jadi _loadQuestions() atau setState(() {}))
+                        setSheetState(() => ansImage = null); // 📍 Pastikan fotonya di-reset
+                        _refreshUserData(); 
+                        setState(() {});
                       },
                       child: const Text("Kirim Jawaban",
                           style: TextStyle(fontWeight: FontWeight.bold)),
