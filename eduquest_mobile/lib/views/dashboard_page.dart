@@ -330,6 +330,43 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
+  // =====================================================================
+  // 📍 TAMBAHAN BARU: Fungsi untuk menambah poin & level user saat berhasil
+  // membantu menjawab pertanyaan orang lain. Ini yang sebelumnya HILANG,
+  // sehingga poin & progress di halaman Profil tidak pernah bertambah
+  // walau sudah menjawab.
+  //
+  // Setelah poin di-update ke database, `_refreshUserData()` yang sudah
+  // dipanggil di `_showAnswerBottomSheet` akan mengambil ulang data user
+  // (termasuk poin & level terbaru) sehingga `currentUser` ter-update dan
+  // otomatis tampil di ProfilPage — TANPA perlu mengubah UI apa pun.
+  // =====================================================================
+  Future<void> _awardAnswerPoints() async {
+    const int pointsPerAnswer = 10; // 📍 Poin yang didapat setiap menjawab
+    const int pointsPerLevel = 50; // 📍 Sesuai "Progress ke Level 2: 0/50"
+
+    try {
+      final db = await DbHelper().database;
+
+      int currentPoints = currentUser.points;
+      int newPoints = currentPoints + pointsPerAnswer;
+      int newLevel = (newPoints ~/ pointsPerLevel) + 1;
+
+      await db.rawUpdate(
+        'UPDATE users SET points = ?, pet_level = ? WHERE username = ?',
+        [newPoints, newLevel, currentUser.username],
+      );
+
+      debugPrint(
+        'POINT DEBUG: username=${currentUser.username} poinBaru=$newPoints levelBaru=$newLevel',
+      );
+    } catch (e, stack) {
+      // 📍 Kalau gagal menambah poin, jangan sampai proses kirim jawaban
+      // yang sudah berhasil ikut gagal/ditampilkan sebagai error ke user.
+      debugPrint('Gagal menambah poin jawaban: $e\n$stack');
+    }
+  }
+
   void _onItemTapped(int index) async {
     setState(() {
       _selectedIndex = index;
@@ -669,12 +706,24 @@ class _DashboardPageState extends State<DashboardPage> {
                         );
 
                         // 3. Kirim Notifikasi ke pembuat pertanyaan
-                        await DbHelper().insertNotification(
-                          question['username'],
-                          currentUser.username ?? '',
-                          'answer',
-                          question['question'],
-                        );
+                        // 📍 Dibungkus try-catch: notifikasi TETAP dikirim
+                        // seperti biasa, tapi kalau proses ini gagal (misal
+                        // error di tabel notifikasi), jangan sampai proses
+                        // kirim jawaban ikut terhenti/gagal juga.
+                        try {
+                          await DbHelper().insertNotification(
+                            question['username'],
+                            currentUser.username ?? '',
+                            'answer',
+                            question['question'],
+                          );
+                        } catch (e) {
+                          debugPrint('Gagal mengirim notifikasi jawaban: $e');
+                        }
+
+                        // 3.5 📍 TAMBAHAN BARU — Beri poin & update level
+                        // ke user yang membantu menjawab (currentUser).
+                        await _awardAnswerPoints();
 
                         // 4. TUTUP POP-UP & TAMPILKAN PESAN SUKSES ✨
                         if (context.mounted) {
