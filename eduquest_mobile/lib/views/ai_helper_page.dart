@@ -27,7 +27,7 @@ class _AiHelperPageState extends State<AiHelperPage> {
   // https://console.groq.com/keys
   // ============================================================
 
-  final String apiKey = "gsk_g73mH8mReWjYXSEARouUWGdyb3FYl5rr3D2jD5sedMWSqH9IE6MuX";
+  final String apiKey = "API Key";
 
   // Model Groq
   final String modelName = "openai/gpt-oss-120b";
