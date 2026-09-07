@@ -1,18 +1,12 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-
 import '../core/db_helper.dart';
 import '../models/user_model.dart';
 
 class AiHelperPage extends StatefulWidget {
   final UserModel user;
-
-  const AiHelperPage({
-    super.key,
-    required this.user,
-  });
+  const AiHelperPage({super.key, required this.user});
 
   @override
   State<AiHelperPage> createState() => _AiHelperPageState();
@@ -22,146 +16,63 @@ class _AiHelperPageState extends State<AiHelperPage> {
   final _dbHelper = DbHelper();
 
   // ============================================================
-  // GROQ API
-  // Buat API Key di:
-  // https://console.groq.com/keys
+  // GANTI DENGAN API KEY GROQ KAMU
+  // LINK API KEY : https://console.groq.com/keys
   // ============================================================
-
-  final String apiKey = "gsk_g73mH8mReWjYXSEARouUWGdyb3FYl5rr3D2jD5sedMWSqH9IE6MuX";
-
-  // Model Groq
-  final String modelName = "openai/gpt-oss-120b";
-
-  // Endpoint Groq
-  final String groqUrl =
-      "https://api.groq.com/openai/v1/chat/completions";
+  final String apiKey = "API KEY";
+  final String modelName = "llama-3.3-70b-versatile";
 
   bool isPersonalHelper = true;
 
-  // ============================================================
-  // PERSONAL HELPER
-  // ============================================================
-
-  final TextEditingController _chatController =
-      TextEditingController();
-
+  final TextEditingController _chatController = TextEditingController();
   List<Map<String, String>> chatHistory = [];
-
   bool isChatLoading = false;
   bool _showInfoBanner = true;
 
-  // ============================================================
-  // FACT CHECKER
-  // ============================================================
-
-  final TextEditingController _factController =
-      TextEditingController();
-
+  final TextEditingController _factController = TextEditingController();
   bool isFactLoading = false;
-
   int? factScore;
-
   String factExplanation = "";
 
-  // ============================================================
-  // COLOR
-  // ============================================================
-
-  final Color _primaryPurple =
-      const Color(0xFF7B61FF);
-
-  // ============================================================
-  // INIT
-  // ============================================================
+  final Color _primaryPurple = const Color(0xFF7B61FF);
 
   @override
   void initState() {
     super.initState();
-
     _loadChatHistory();
   }
 
-  @override
-  void dispose() {
-    _chatController.dispose();
-    _factController.dispose();
-
-    super.dispose();
-  }
-
-  // ============================================================
-  // LOAD CHAT HISTORY
-  // ============================================================
-
-  Future<void> _loadChatHistory() async {
-    final history =
-        await _dbHelper.getChatHistory(
-      widget.user.username,
-    );
-
+  void _loadChatHistory() async {
+    // 📍 Mengirim username agar yang diload hanya history akun yang sedang login
+    var history = await _dbHelper.getChatHistory(widget.user.username);
     if (!mounted) return;
-
     setState(() {
       chatHistory = history;
     });
   }
 
-  // ============================================================
-  // PERSONAL HELPER
-  // GROQ API
-  // ============================================================
-
+  // --- FUNGSI KIRIM CHAT (GROQ API) ---
   Future<void> _sendMessage() async {
-    final String text =
-        _chatController.text.trim();
+    String text = _chatController.text.trim();
+    if (text.isEmpty) return;
 
-    if (text.isEmpty || isChatLoading) {
-      return;
-    }
-
-    // Simpan pesan user
-    await _dbHelper.saveMessage(
-      widget.user.username,
-      "user",
-      text,
-    );
-
-    if (!mounted) return;
+    // 📍 Menyimpan chat dengan menyertakan username
+    await _dbHelper.saveMessage(widget.user.username, "user", text);
 
     setState(() {
-      chatHistory.add({
-        "role": "user",
-        "message": text,
-      });
-
+      chatHistory.add({"role": "user", "message": text});
       isChatLoading = true;
     });
-
     _chatController.clear();
 
     try {
-      final url = Uri.parse(groqUrl);
+      final url = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
 
-      final String promptContext = '''
-Kamu adalah tutor EduQuest.
-
-Tugasmu adalah membantu siswa memahami pertanyaan, bukan hanya memberikan jawaban.
-
-Berikan penjelasan dengan urutan:
-
-1. Jelaskan konsep yang berhubungan dengan pertanyaan.
-2. Berikan petunjuk atau langkah penyelesaian secara bertahap.
-3. Gunakan bahasa Indonesia yang mudah dipahami siswa.
-4. Jika ada perhitungan, tunjukkan proses perhitungannya.
-5. Di bagian paling akhir, berikan jawaban final.
-
-Gunakan format:
-
-✅ Jawaban: [jawaban lengkap]
-
-Pertanyaan siswa:
-$text
-''';
+      String promptContext =
+          "Kamu adalah tutor EduQuest. Berikan petunjuk step-by-step dulu "
+          "agar siswa memahami konsepnya, lalu di bagian akhir berikan "
+          "jawaban finalnya dengan format: '✅ Jawaban: [jawaban lengkap]'. "
+          "Pertanyaan: $text";
 
       final response = await http.post(
         url,
@@ -175,12 +86,9 @@ $text
             {
               "role": "system",
               "content":
-                  "Kamu adalah tutor EduQuest yang membantu siswa belajar dengan penjelasan dan petunjuk bertahap."
+                  "Kamu adalah tutor EduQuest yang membantu siswa belajar dengan petunjuk bertahap."
             },
-            {
-              "role": "user",
-              "content": promptContext,
-            }
+            {"role": "user", "content": promptContext}
           ],
           "temperature": 0.7,
           "max_tokens": 1024,
@@ -188,48 +96,24 @@ $text
       );
 
       if (response.statusCode == 200) {
-        final data =
-            jsonDecode(response.body);
+        final data = jsonDecode(response.body);
+        String reply = data['choices'][0]['message']['content'];
 
-        final String reply =
-            data['choices'][0]['message']['content']
-                .toString()
-                .trim();
-
-        // Simpan balasan AI
-        await _dbHelper.saveMessage(
-          widget.user.username,
-          "ai",
-          reply,
-        );
+        // 📍 Menyimpan balasan AI dengan menyertakan username
+        await _dbHelper.saveMessage(widget.user.username, "ai", reply);
 
         if (!mounted) return;
-
         setState(() {
-          chatHistory.add({
-            "role": "ai",
-            "message": reply,
-          });
+          chatHistory.add({"role": "ai", "message": reply});
         });
       } else {
         throw Exception(
-          "Status: ${response.statusCode}\n"
-          "Body: ${response.body}",
-        );
+            "Status: ${response.statusCode}, Body: ${response.body}");
       }
     } catch (e) {
-      debugPrint(
-        "PERSONAL HELPER ERROR: $e",
-      );
-
       if (!mounted) return;
-
       setState(() {
-        chatHistory.add({
-          "role": "ai",
-          "message":
-              "Maaf, terjadi kesalahan saat menghubungi AI.\n\n$e",
-        });
+        chatHistory.add({"role": "ai", "message": "Error: $e"});
       });
     } finally {
       if (mounted) {
@@ -240,236 +124,98 @@ $text
     }
   }
 
-  // ============================================================
-  // FACT CHECKER
-  // GROQ API
-  // ============================================================
-
+  // --- FUNGSI FACT CHECKER (GROQ API) ---
   Future<void> _checkFact() async {
-    final String text =
-        _factController.text.trim();
-
-    if (text.isEmpty || isFactLoading) {
-      return;
-    }
+    String text = _factController.text.trim();
+    if (text.isEmpty) return;
 
     setState(() {
       isFactLoading = true;
-
       factScore = null;
-
       factExplanation = "";
     });
 
     try {
-      final url = Uri.parse(groqUrl);
+      final url = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
 
-      final String promptContext = '''
-Evaluasi keakuratan informasi berikut:
-
-"$text"
-
-Berikan skor berdasarkan ketentuan berikut:
-
-100:
-Informasi sepenuhnya benar dan akurat.
-
-75-99:
-Mayoritas informasi benar, tetapi terdapat sedikit detail yang kurang tepat.
-
-40-74:
-Informasi merupakan campuran fakta dan opini, ambigu, atau membutuhkan konteks tambahan.
-
-1-39:
-Mayoritas informasi salah atau mengandung informasi yang menyesatkan.
-
-0:
-Informasi sepenuhnya salah atau merupakan hoax.
-
-Kembalikan hasil menggunakan JSON VALID dengan format:
-
-{
-  "score": 100,
-  "explanation": "Penjelasan mengenai hasil analisis fakta."
-}
-
-Ketentuan:
-
-- score wajib berupa integer dari 0 sampai 100.
-- explanation wajib berupa string.
-- Gunakan bahasa Indonesia.
-- Jangan gunakan Markdown.
-- Jangan gunakan ```json.
-- Jangan memberikan teks apa pun di luar object JSON.
-''';
+      String promptContext = "Evaluasi keakuratan fakta ini: '$text'.\n\n"
+          "Berikan penilaian skor dengan ketentuan skala berikut:\n"
+          "- 100: Fakta sepenuhnya benar dan akurat.\n"
+          "- 75-99: Mayoritas benar, namun ada sedikit detail kecil yang kurang pas.\n"
+          "- 40-74: Campuran antara fakta dan opini, atau informasinya ambigu/kurang konteks.\n"
+          "- 1-39: Mayoritas salah atau mengandung disinformasi.\n"
+          "- 0: Fakta sepenuhnya salah atau hoax total.\n\n"
+          "Balas HANYA dengan format JSON persis seperti ini tanpa tambahan markdown atau teks lain:\n"
+          "{\"score\": angka_sesuai_skala, \"explanation\": \"penjelasan analisisnya\"}";
 
       final response = await http.post(
         url,
         headers: {
-          'Content-Type':
-              'application/json',
-
-          'Authorization':
-              'Bearer $apiKey',
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $apiKey',
         },
         body: jsonEncode({
           "model": modelName,
-
           "messages": [
             {
               "role": "system",
               "content":
-                  "Kamu adalah fact checker objektif. "
-                  "Analisis keakuratan informasi dan selalu kembalikan JSON valid "
-                  "dengan field score dan explanation."
+                  "Kamu adalah fact checker objektif yang menilai kebenaran informasi berdasarkan skala detail."
             },
-            {
-              "role": "user",
-              "content":
-                  promptContext,
-            }
+            {"role": "user", "content": promptContext}
           ],
-
-          // Paksa AI menghasilkan JSON
-          "response_format": {
-            "type":
-                "json_object",
-          },
-
-          "temperature": 0.2,
-
-          "max_tokens": 512,
+          "temperature": 0.3,
+          "max_tokens": 256,
         }),
       );
 
       if (response.statusCode == 200) {
-        final data =
-            jsonDecode(
-          response.body,
-        );
+        final data = jsonDecode(response.body);
+        String reply = data['choices'][0]['message']['content'];
 
-        final String reply =
-            data['choices'][0]['message']['content']
-                .toString()
-                .trim();
-
-        debugPrint(
-          "RAW FACT CHECK RESPONSE:",
-        );
-
-        debugPrint(reply);
+        reply = reply.replaceAll('```json', '').replaceAll('```', '').trim();
 
         try {
-          final Map<String, dynamic>
-              jsonReply =
-              jsonDecode(reply)
-                  as Map<String, dynamic>;
-
-          if (jsonReply['score'] == null ||
-              jsonReply['explanation'] == null) {
-            throw const FormatException(
-              "Field score atau explanation tidak ditemukan.",
-            );
-          }
-
-          final num scoreValue =
-              jsonReply['score']
-                  as num;
-
-          int score =
-              scoreValue.round();
-
-          // Pastikan score selalu 0-100
-          if (score < 0) {
-            score = 0;
-          }
-
-          if (score > 100) {
-            score = 100;
-          }
-
-          final String explanation =
-              jsonReply['explanation']
-                  .toString();
+          final jsonReply = jsonDecode(reply);
 
           if (!mounted) return;
-
           setState(() {
-            factScore = score;
-
-            factExplanation =
-                explanation;
+            factScore = jsonReply['score'];
+            factExplanation = jsonReply['explanation'];
           });
 
-          // ====================================================
-          // TAMBAH POINT
-          // ====================================================
-
-          if (score > 60) {
-            await _dbHelper.addPoints(
-              widget.user.username,
-              5,
-            );
+          if (factScore != null && factScore! > 60) {
+            await _dbHelper.addPoints(widget.user.username, 5);
 
             if (!mounted) return;
-
-            ScaffoldMessenger.of(context)
-                .showSnackBar(
+            ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text(
-                  "Hebat! Fakta akurat. +5 Poin Pet! 🎉",
-                ),
-                backgroundColor:
-                    Colors.green,
+                content: Text("Hebat! Fakta akurat. +5 Poin Pet! 🎉"),
+                backgroundColor: Colors.green,
               ),
             );
           }
         } catch (formatError) {
-          debugPrint(
-            "JSON PARSE ERROR: $formatError",
-          );
-
-          debugPrint(
-            "RAW RESPONSE: $reply",
-          );
-
           if (!mounted) return;
-
-          ScaffoldMessenger.of(context)
-              .showSnackBar(
+          ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                "Gagal membaca hasil AI.\n\n"
-                "Balasan AI:\n$reply",
-              ),
-              backgroundColor:
-                  Colors.orange,
+              content: Text("Gagal membaca hasil AI. Balasan asli: $reply"),
+              backgroundColor: Colors.orange,
             ),
           );
         }
       } else {
         throw Exception(
-          "Status: ${response.statusCode}\n"
-          "Body: ${response.body}",
-        );
+            "Status: ${response.statusCode}, Body: ${response.body}");
       }
     } catch (e) {
-      debugPrint(
-        "FACT CHECK ERROR: $e",
-      );
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        SnackBar(
-          content: Text(
-            "Gagal mengecek fakta.\n\n$e",
-          ),
-          backgroundColor:
-              Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text(
+                  "Gagal mengecek fakta. Periksa internet atau coba lagi.")),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -479,252 +225,102 @@ Ketentuan:
     }
   }
 
-  // ============================================================
-  // MAIN UI
-  // ============================================================
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          Colors.grey.shade50,
-
+      backgroundColor: Colors.grey.shade50,
       body: Column(
         children: [
-          // ====================================================
-          // HEADER
-          // ====================================================
-
           Container(
             padding:
-                const EdgeInsets.only(
-              top: 60,
-              left: 20,
-              right: 20,
-              bottom: 30,
-            ),
-
+                const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
             decoration: BoxDecoration(
-              color:
-                  _primaryPurple,
-
+              color: _primaryPurple,
               borderRadius:
-                  const BorderRadius.vertical(
-                bottom:
-                    Radius.circular(
-                  30,
-                ),
-              ),
+                  const BorderRadius.vertical(bottom: Radius.circular(30)),
             ),
-
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment:
-                      MainAxisAlignment
-                          .spaceBetween,
-
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
                       "AI Helper",
-                      style:
-                          TextStyle(
-                        color:
-                            Colors.white,
-                        fontSize:
-                            26,
-                        fontWeight:
-                            FontWeight.bold,
-                      ),
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold),
                     ),
-
-                    if (isPersonalHelper &&
-                        chatHistory
-                            .isNotEmpty)
+                    if (isPersonalHelper && chatHistory.isNotEmpty)
                       IconButton(
-                        icon:
-                            const Icon(
-                          Icons
-                              .delete_sweep,
-                          color:
-                              Colors.white70,
-                        ),
-
-                        onPressed:
-                            () async {
-                          await _dbHelper
-                              .clearChatHistory(
-                            widget
-                                .user
-                                .username,
-                          );
-
-                          await _loadChatHistory();
+                        icon: const Icon(Icons.delete_sweep,
+                            color: Colors.white70),
+                        onPressed: () async {
+                          // 📍 Menghapus history dengan menyertakan username
+                          await _dbHelper.clearChatHistory(widget.user.username);
+                          _loadChatHistory();
                         },
-                      ),
+                      )
                   ],
                 ),
-
-                const SizedBox(
-                  height: 4,
-                ),
-
+                const SizedBox(height: 4),
                 const Text(
                   "Bantuan pintar untuk belajarmu",
-                  style:
-                      TextStyle(
-                    color:
-                        Colors.white70,
-                    fontSize:
-                        14,
-                  ),
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
                 ),
-
-                const SizedBox(
-                  height: 24,
-                ),
-
-                // =================================================
-                // PERSONAL / FACT SWITCH
-                // =================================================
-
+                const SizedBox(height: 24),
                 Container(
-                  decoration:
-                      BoxDecoration(
-                    color: Colors.white
-                        .withValues(
-                      alpha:
-                          0.2,
-                    ),
-
-                    borderRadius:
-                        BorderRadius.circular(
-                      30,
-                    ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(30),
                   ),
-
                   child: Row(
                     children: [
-                      // ============================================
-                      // PERSONAL HELPER
-                      // ============================================
-
                       Expanded(
-                        child:
-                            GestureDetector(
-                          onTap: () {
-                            setState(
-                              () {
-                                isPersonalHelper =
-                                    true;
-                              },
-                            );
-                          },
-
-                          child:
-                              Container(
-                            padding:
-                                const EdgeInsets
-                                    .symmetric(
-                              vertical:
-                                  12,
+                        child: GestureDetector(
+                          onTap: () => setState(() => isPersonalHelper = true),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isPersonalHelper
+                                  ? Colors.white
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(30),
                             ),
-
-                            decoration:
-                                BoxDecoration(
-                              color:
-                                  isPersonalHelper
-                                      ? Colors.white
-                                      : Colors
-                                          .transparent,
-
-                              borderRadius:
-                                  BorderRadius
-                                      .circular(
-                                30,
-                              ),
-                            ),
-
-                            child:
-                                Center(
-                              child:
-                                  Text(
+                            child: Center(
+                              child: Text(
                                 "💡 Personal Helper",
-
-                                style:
-                                    TextStyle(
+                                style: TextStyle(
                                   color: isPersonalHelper
                                       ? _primaryPurple
                                       : Colors.white,
-
-                                  fontWeight:
-                                      FontWeight
-                                          .bold,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ),
                           ),
                         ),
                       ),
-
-                      // ============================================
-                      // FACT CHECKER
-                      // ============================================
-
                       Expanded(
-                        child:
-                            GestureDetector(
-                          onTap: () {
-                            setState(
-                              () {
-                                isPersonalHelper =
-                                    false;
-                              },
-                            );
-                          },
-
-                          child:
-                              Container(
-                            padding:
-                                const EdgeInsets
-                                    .symmetric(
-                              vertical:
-                                  12,
+                        child: GestureDetector(
+                          onTap: () => setState(() => isPersonalHelper = false),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: !isPersonalHelper
+                                  ? Colors.white
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(30),
                             ),
-
-                            decoration:
-                                BoxDecoration(
-                              color:
-                                  !isPersonalHelper
-                                      ? Colors.white
-                                      : Colors
-                                          .transparent,
-
-                              borderRadius:
-                                  BorderRadius
-                                      .circular(
-                                30,
-                              ),
-                            ),
-
-                            child:
-                                Center(
-                              child:
-                                  Text(
+                            child: Center(
+                              child: Text(
                                 "☑️ Fact Checker",
-
-                                style:
-                                    TextStyle(
+                                style: TextStyle(
                                   color: !isPersonalHelper
                                       ? _primaryPurple
                                       : Colors.white,
-
-                                  fontWeight:
-                                      FontWeight
-                                          .bold,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ),
@@ -733,686 +329,241 @@ Ketentuan:
                       ),
                     ],
                   ),
-                ),
+                )
               ],
             ),
           ),
-
-          // ====================================================
-          // CONTENT
-          // ====================================================
-
           Expanded(
             child:
-                isPersonalHelper
-                    ? _buildPersonalHelper()
-                    : _buildFactChecker(),
+                isPersonalHelper ? _buildPersonalHelper() : _buildFactChecker(),
           ),
         ],
       ),
     );
   }
 
-  // ============================================================
-  // PERSONAL HELPER UI
-  // ============================================================
-
   Widget _buildPersonalHelper() {
     return Column(
       children: [
-        // ======================================================
-        // INFO BANNER
-        // ======================================================
-
         if (_showInfoBanner)
           AnimatedSize(
-            duration:
-                const Duration(
-              milliseconds:
-                  300,
-            ),
-
-            curve:
-                Curves.easeInOut,
-
-            child:
-                Container(
-              margin:
-                  const EdgeInsets
-                      .all(
-                20,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            child: Container(
+              margin: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF8E1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.amber.shade200),
               ),
-
-              padding:
-                  const EdgeInsets
-                      .all(
-                16,
-              ),
-
-              decoration:
-                  BoxDecoration(
-                color:
-                    const Color(
-                  0xFFFFF8E1,
-                ),
-
-                borderRadius:
-                    BorderRadius
-                        .circular(
-                  16,
-                ),
-
-                border:
-                    Border.all(
-                  color:
-                      Colors.amber
-                          .shade200,
-                ),
-              ),
-
-              child:
-                  Row(
-                crossAxisAlignment:
-                    CrossAxisAlignment
-                        .start,
-
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    Icons
-                        .auto_awesome,
-                    color:
-                        Colors.amber,
-                  ),
-
-                  const SizedBox(
-                    width:
-                        12,
-                  ),
-
+                  const Icon(Icons.auto_awesome, color: Colors.amber),
+                  const SizedBox(width: 12),
                   const Expanded(
-                    child:
-                        Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment
-                              .start,
-
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           "Bagaimana Cara Kerja Personal Helper?",
-
-                          style:
-                              TextStyle(
-                            fontWeight:
-                                FontWeight
-                                    .bold,
-
-                            color:
-                                Colors
-                                    .brown,
-                          ),
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, color: Colors.brown),
                         ),
-
-                        SizedBox(
-                          height:
-                              4,
-                        ),
-
+                        SizedBox(height: 4),
                         Text(
                           "AI memberikan petunjuk step-by-step, lalu jawaban final di akhir!",
-
-                          style:
-                              TextStyle(
-                            fontSize:
-                                12,
-
-                            color:
-                                Colors
-                                    .brown,
-                          ),
+                          style: TextStyle(fontSize: 12, color: Colors.brown),
                         ),
                       ],
                     ),
                   ),
-
                   GestureDetector(
-                    onTap: () {
-                      setState(
-                        () {
-                          _showInfoBanner =
-                              false;
-                        },
-                      );
-                    },
-
+                    onTap: () => setState(() => _showInfoBanner = false),
                     child:
-                        const Icon(
-                      Icons.close,
-
-                      size:
-                          18,
-
-                      color:
-                          Colors.brown,
-                    ),
+                        const Icon(Icons.close, size: 18, color: Colors.brown),
                   ),
                 ],
               ),
             ),
           ),
-
-        // ======================================================
-        // CHAT LIST
-        // ======================================================
-
         Expanded(
-          child:
-              chatHistory.isEmpty
-                  ? Center(
-                      child:
-                          Text(
-                        "Belum ada obrolan. Mulai tanyakan sesuatu!",
-
-                        style:
-                            TextStyle(
-                          color:
-                              Colors.grey
-                                  .shade400,
+          child: chatHistory.isEmpty
+              ? Center(
+                  child: Text(
+                    "Belum ada obrolan. Mulai tanyakan sesuatu!",
+                    style: TextStyle(color: Colors.grey.shade400),
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  itemCount: chatHistory.length,
+                  itemBuilder: (context, index) {
+                    bool isUser = chatHistory[index]["role"] == "user";
+                    return Align(
+                      alignment:
+                          isUser ? Alignment.centerRight : Alignment.centerLeft,
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: isUser ? _primaryPurple : Colors.white,
+                          borderRadius: BorderRadius.circular(16).copyWith(
+                            bottomRight: isUser
+                                ? const Radius.circular(0)
+                                : const Radius.circular(16),
+                            bottomLeft: !isUser
+                                ? const Radius.circular(0)
+                                : const Radius.circular(16),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 5)
+                          ],
+                        ),
+                        child: Text(
+                          chatHistory[index]["message"]!,
+                          style: TextStyle(
+                              color: isUser ? Colors.white : Colors.black87),
                         ),
                       ),
-                    )
-                  : ListView.builder(
-                      padding:
-                          const EdgeInsets
-                              .symmetric(
-                        horizontal:
-                            20,
-                      ),
-
-                      itemCount:
-                          chatHistory.length,
-
-                      itemBuilder:
-                          (
-                        context,
-                        index,
-                      ) {
-                        final bool
-                            isUser =
-                            chatHistory[index]
-                                    ["role"] ==
-                                "user";
-
-                        return Align(
-                          alignment: isUser
-                              ? Alignment
-                                  .centerRight
-                              : Alignment
-                                  .centerLeft,
-
-                          child:
-                              Container(
-                            margin:
-                                const EdgeInsets
-                                    .only(
-                              bottom:
-                                  12,
-                            ),
-
-                            padding:
-                                const EdgeInsets
-                                    .all(
-                              14,
-                            ),
-
-                            decoration:
-                                BoxDecoration(
-                              color:
-                                  isUser
-                                      ? _primaryPurple
-                                      : Colors.white,
-
-                              borderRadius:
-                                  BorderRadius
-                                      .circular(
-                                16,
-                              ).copyWith(
-                                bottomRight: isUser
-                                    ? const Radius
-                                        .circular(
-                                        0,
-                                      )
-                                    : const Radius
-                                        .circular(
-                                        16,
-                                      ),
-
-                                bottomLeft: !isUser
-                                    ? const Radius
-                                        .circular(
-                                        0,
-                                      )
-                                    : const Radius
-                                        .circular(
-                                        16,
-                                      ),
-                              ),
-
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black
-                                      .withValues(
-                                    alpha:
-                                        0.05,
-                                  ),
-
-                                  blurRadius:
-                                      5,
-                                ),
-                              ],
-                            ),
-
-                            child:
-                                Text(
-                              chatHistory[index]
-                                      ["message"] ??
-                                  "",
-
-                              style:
-                                  TextStyle(
-                                color: isUser
-                                    ? Colors.white
-                                    : Colors
-                                        .black87,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+                    );
+                  },
+                ),
         ),
-
-        // ======================================================
-        // CHAT INPUT
-        // ======================================================
-
         Padding(
-          padding:
-              const EdgeInsets.all(
-            20,
-          ),
-
-          child:
-              Row(
+          padding: const EdgeInsets.all(20),
+          child: Row(
             children: [
               Expanded(
-                child:
-                    TextField(
-                  controller:
-                      _chatController,
-
-                  textInputAction:
-                      TextInputAction.send,
-
-                  onSubmitted:
-                      (_) {
-                    if (!isChatLoading) {
-                      _sendMessage();
-                    }
-                  },
-
-                  decoration:
-                      InputDecoration(
-                    hintText:
-                        "Tulis pertanyaanmu...",
-
-                    filled:
-                        true,
-
-                    fillColor:
-                        Colors.white,
-
-                    border:
-                        OutlineInputBorder(
-                      borderRadius:
-                          BorderRadius
-                              .circular(
-                        30,
-                      ),
-
-                      borderSide:
-                          BorderSide
-                              .none,
+                child: TextField(
+                  controller: _chatController,
+                  decoration: InputDecoration(
+                    hintText: "Tulis pertanyaanmu...",
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: BorderSide.none,
                     ),
-
-                    contentPadding:
-                        const EdgeInsets
-                            .symmetric(
-                      horizontal:
-                          20,
-
-                      vertical:
-                          14,
-                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 14),
                   ),
                 ),
               ),
-
-              const SizedBox(
-                width:
-                    12,
-              ),
-
+              const SizedBox(width: 12),
               CircleAvatar(
-                radius:
-                    25,
-
-                backgroundColor:
-                    _primaryPurple,
-
-                child:
-                    isChatLoading
-                        ? const SizedBox(
-                            width:
-                                20,
-                            height:
-                                20,
-
-                            child:
-                                CircularProgressIndicator(
-                              color:
-                                  Colors.white,
-
-                              strokeWidth:
-                                  2,
-                            ),
-                          )
-                        : IconButton(
-                            icon:
-                                const Icon(
-                              Icons.send,
-
-                              color:
-                                  Colors.white,
-                            ),
-
-                            onPressed:
-                                _sendMessage,
-                          ),
-              ),
+                radius: 25,
+                backgroundColor: _primaryPurple,
+                child: isChatLoading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2),
+                      )
+                    : IconButton(
+                        icon: const Icon(Icons.send, color: Colors.white),
+                        onPressed: _sendMessage,
+                      ),
+              )
             ],
           ),
-        ),
+        )
       ],
     );
   }
 
-  // ============================================================
-  // FACT CHECKER UI
-  // ============================================================
-
   Widget _buildFactChecker() {
     return SingleChildScrollView(
-      padding:
-          const EdgeInsets.all(
-        20,
-      ),
-
-      child:
-          Column(
+      padding: const EdgeInsets.all(20),
+      child: Column(
         children: [
-          // ====================================================
-          // INPUT
-          // ====================================================
-
           TextField(
-            controller:
-                _factController,
-
-            maxLines:
-                4,
-
-            decoration:
-                InputDecoration(
+            controller: _factController,
+            maxLines: 4,
+            decoration: InputDecoration(
               hintText:
-                  "Masukkan fakta yang ingin kamu cek kebenarannya...\n"
-                  "Contoh: Bumi adalah pusat tata surya.",
-
-              filled:
-                  true,
-
-              fillColor:
-                  Colors.white,
-
-              border:
-                  OutlineInputBorder(
-                borderRadius:
-                    BorderRadius
-                        .circular(
-                  16,
-                ),
-
+                  "Masukkan fakta yang ingin kamu cek kebenarannya...\nContoh: Bumi adalah pusat tata surya.",
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
                 borderSide:
-                    BorderSide(
-                  color:
-                      _primaryPurple
-                          .withValues(
-                    alpha:
-                        0.5,
-                  ),
-                ),
+                    BorderSide(color: _primaryPurple.withValues(alpha: 0.5)),
               ),
             ),
           ),
-
-          const SizedBox(
-            height:
-                16,
-          ),
-
-          // ====================================================
-          // BUTTON
-          // ====================================================
-
+          const SizedBox(height: 16),
           SizedBox(
-            width:
-                double.infinity,
-
-            height:
-                50,
-
-            child:
-                ElevatedButton.icon(
-              onPressed:
-                  isFactLoading
-                      ? null
-                      : _checkFact,
-
-              icon:
-                  isFactLoading
-                      ? const SizedBox(
-                          width:
-                              20,
-
-                          height:
-                              20,
-
-                          child:
-                              CircularProgressIndicator(
-                            color:
-                                Colors.white,
-
-                            strokeWidth:
-                                2,
-                          ),
-                        )
-                      : const Icon(
-                          Icons.search,
-                        ),
-
-              label:
-                  Text(
-                isFactLoading
-                    ? "Mengecek..."
-                    : "Cek Fakta Sekarang",
-              ),
-
-              style:
-                  ElevatedButton
-                      .styleFrom(
-                backgroundColor:
-                    _primaryPurple,
-
-                foregroundColor:
-                    Colors.white,
-
-                shape:
-                    RoundedRectangleBorder(
-                  borderRadius:
-                      BorderRadius
-                          .circular(
-                    30,
-                  ),
-                ),
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: isFactLoading ? null : _checkFact,
+              icon: isFactLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2))
+                  : const Icon(Icons.search),
+              label: Text(isFactLoading ? "Mengecek..." : "Cek Fakta Sekarang"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryPurple,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30)),
               ),
             ),
           ),
-
-          const SizedBox(
-            height:
-                40,
-          ),
-
-          // ====================================================
-          // RESULT
-          // ====================================================
-
+          const SizedBox(height: 40),
           if (factScore != null) ...[
             Stack(
-              alignment:
-                  Alignment.center,
-
+              alignment: Alignment.center,
               children: [
                 SizedBox(
-                  width:
-                      120,
-
-                  height:
-                      120,
-
-                  child:
-                      CircularProgressIndicator(
-                    value:
-                        factScore! /
-                            100,
-
-                    strokeWidth:
-                        12,
-
-                    backgroundColor:
-                        Colors.grey
-                            .shade200,
-
-                    color: factScore! >
-                            70
+                  width: 120,
+                  height: 120,
+                  child: CircularProgressIndicator(
+                    value: factScore! / 100,
+                    strokeWidth: 12,
+                    backgroundColor: Colors.grey.shade200,
+                    color: factScore! > 70
                         ? Colors.green
-                        : factScore! >
-                                40
-                            ? Colors.orange
-                            : Colors.red,
-
-                    strokeCap:
-                        StrokeCap
-                            .round,
+                        : (factScore! > 40 ? Colors.orange : Colors.red),
+                    strokeCap: StrokeCap.round,
                   ),
                 ),
-
                 Text(
                   "$factScore%",
-
-                  style:
-                      TextStyle(
-                    fontSize:
-                        32,
-
-                    fontWeight:
-                        FontWeight
-                            .bold,
-
-                    color:
-                        _primaryPurple,
-                  ),
+                  style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: _primaryPurple),
                 ),
               ],
             ),
-
-            const SizedBox(
-              height:
-                  24,
-            ),
-
+            const SizedBox(height: 24),
             Container(
-              width:
-                  double.infinity,
-
-              padding:
-                  const EdgeInsets.all(
-                16,
-              ),
-
-              decoration:
-                  BoxDecoration(
-                color:
-                    Colors.white,
-
-                borderRadius:
-                    BorderRadius.circular(
-                  16,
-                ),
-              ),
-
-              child:
-                  Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment
-                        .start,
-
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                  color: Colors.white, borderRadius: BorderRadius.circular(16)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "Hasil Analisis AI:",
-
-                    style:
-                        TextStyle(
-                      fontWeight:
-                          FontWeight
-                              .bold,
-
-                      fontSize:
-                          16,
-                    ),
-                  ),
-
-                  const SizedBox(
-                    height:
-                        8,
-                  ),
-
-                  Text(
-                    factExplanation,
-
-                    style:
-                        TextStyle(
-                      color:
-                          Colors.grey
-                              .shade700,
-
-                      height:
-                          1.5,
-                    ),
-                  ),
+                  const Text("Hasil Analisis AI:",
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 8),
+                  Text(factExplanation,
+                      style:
+                          TextStyle(color: Colors.grey.shade700, height: 1.5)),
                 ],
               ),
-            ),
-          ],
+            )
+          ]
         ],
       ),
     );
